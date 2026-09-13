@@ -1,53 +1,129 @@
-function autoResize(el) {
-    el.style.height = 'auto';
-    el.style.height = el.scrollHeight + 'px';
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-    document.querySelectorAll('.form-group textarea').forEach(ta => {
-        autoResize(ta);
-        ta.addEventListener('input', () => autoResize(ta));
-    });
-});
-
 const COHORTS_STORAGE_KEY = 'cfi_cohorts';
 const STUDENTS_BY_COHORT_STORAGE_KEY = 'cfi_students_by_cohort';
 const LAST_PROGRESS_BY_COHORT_STORAGE_KEY = 'cfi_lastProgress_by_cohort';
+// Form data saved before cohorts existed; migrated into the first cohort that loads
+const LEGACY_PROGRESS_STORAGE_KEY = 'cfi_lastProgress';
+const THEME_STORAGE_KEY = 'theme';
 
+const DEFAULT_SESSION_TIME = '1:30 PM - 4:30 PM';
+const OUTPUT_PLACEHOLDER = 'Fill in the form and click "Generate Update" to see the output here.';
+// Bullets or numbering pasted into topics/tasks; the output adds its own
+const LIST_MARKER = /^(?:[•*-]|\d+[.)])\s+/;
+
+const progressForm = document.getElementById('progressForm');
 const cohortControls = document.getElementById('cohortControls');
 const cohortDropdownBtn = document.getElementById('cohortDropdownBtn');
 const cohortDropdownMenu = document.getElementById('cohortDropdownMenu');
 const cohortDropdownLabel = document.getElementById('cohortDropdownLabel');
-let currentCohort = '';
+const weekInput = document.getElementById('week');
+const dayInput = document.getElementById('day');
+const sessionDateInput = document.getElementById('sessionDate');
+const sessionTimeInput = document.getElementById('sessionTime');
+const topicsInput = document.getElementById('topics');
+const tasksInput = document.getElementById('tasks');
+const studentPicker = document.getElementById('studentPicker');
+const addStudentBtn = document.getElementById('addStudentBtn');
+const toggleAllStudentsBtn = document.getElementById('toggleAllStudentsBtn');
+const outputContent = document.getElementById('outputContent');
+const copyBtn = document.getElementById('copyBtn');
+const copyMarkdownBtn = document.getElementById('copyMarkdownBtn');
+const themeToggle = document.getElementById('themeToggle');
 
-function getStoredCohorts() {
-    const raw = localStorage.getItem(COHORTS_STORAGE_KEY);
-    if (!raw) return [];
+let currentCohort = '';
+let presentStudents = new Set();
+let generatedUpdate = null; // { text, markdown } for the copy buttons
+
+// ---- Storage ----
+
+function readStorage(key, fallback) {
+    const raw = localStorage.getItem(key);
+    if (!raw) return fallback;
     try {
-        const parsed = JSON.parse(raw);
-        if (!Array.isArray(parsed)) return [];
-        const cleaned = parsed.map(item => String(item || '').trim()).filter(Boolean);
-        return cleaned;
+        return JSON.parse(raw) ?? fallback;
     } catch (error) {
-        console.error('Error reading cohorts from storage:', error);
-        return [];
+        console.error(`Error reading ${key} from storage:`, error);
+        return fallback;
     }
 }
 
-function saveCohorts(cohorts) {
-    localStorage.setItem(COHORTS_STORAGE_KEY, JSON.stringify(cohorts));
+function writeStorage(key, value) {
+    localStorage.setItem(key, JSON.stringify(value));
 }
 
-function renderCohorts(selectedCohort) {
-    if (!cohortDropdownMenu || !cohortDropdownLabel) return;
-    const cohorts = getStoredCohorts();
-    currentCohort = selectedCohort || cohorts[0] || '';
+// Maps keyed by cohort name
+function readCohortMap(key) {
+    const map = readStorage(key, {});
+    return typeof map === 'object' && !Array.isArray(map) ? map : {};
+}
+
+function toNameList(value) {
+    return Array.isArray(value) ? value.map(item => String(item || '').trim()).filter(Boolean) : [];
+}
+
+function getStoredCohorts() {
+    return toNameList(readStorage(COHORTS_STORAGE_KEY, []));
+}
+
+function getStoredStudents(cohort) {
+    return toNameList(readCohortMap(STUDENTS_BY_COHORT_STORAGE_KEY)[cohort]);
+}
+
+function saveStudents(cohort, students) {
+    const studentsByCohort = readCohortMap(STUDENTS_BY_COHORT_STORAGE_KEY);
+    studentsByCohort[cohort] = students;
+    writeStorage(STUDENTS_BY_COHORT_STORAGE_KEY, studentsByCohort);
+}
+
+function saveFormValues(cohort, values) {
+    const progressByCohort = readCohortMap(LAST_PROGRESS_BY_COHORT_STORAGE_KEY);
+    progressByCohort[cohort] = values;
+    writeStorage(LAST_PROGRESS_BY_COHORT_STORAGE_KEY, progressByCohort);
+}
+
+function getFormValuesForCohort(cohort) {
+    if (!cohort) return defaultFormValues();
+
+    let saved = readCohortMap(LAST_PROGRESS_BY_COHORT_STORAGE_KEY)[cohort];
+    if (!saved) {
+        const legacy = readStorage(LEGACY_PROGRESS_STORAGE_KEY, null);
+        if (legacy && typeof legacy === 'object') {
+            saved = legacy;
+            saveFormValues(cohort, legacy);
+            localStorage.removeItem(LEGACY_PROGRESS_STORAGE_KEY);
+        }
+    }
+    if (!saved || typeof saved !== 'object') return defaultFormValues();
+
+    const values = { ...defaultFormValues(), ...saved };
+    if (Array.isArray(saved.presentStudents)) {
+        values.presentStudents = saved.presentStudents;
+    } else if (Array.isArray(saved.absentees)) {
+        // Older saves stored absentees instead of present students
+        values.presentStudents = getStoredStudents(cohort).filter(name => !saved.absentees.includes(name));
+    } else {
+        values.presentStudents = [];
+    }
+    return values;
+}
+
+// ---- Cohorts ----
+
+function setCohortDropdownOpen(isOpen) {
+    cohortControls.classList.toggle('is-open', isOpen);
+    cohortDropdownBtn.setAttribute('aria-expanded', isOpen);
+}
+
+function renderCohorts() {
     cohortDropdownLabel.textContent = currentCohort || 'Add cohort';
     cohortDropdownMenu.innerHTML = '';
 
-    cohorts.forEach(cohort => {
+    getStoredCohorts().forEach(cohort => {
+        const isActive = cohort === currentCohort;
         const row = document.createElement('div');
-        row.className = `cohort-dropdown-item${cohort === currentCohort ? ' is-active' : ''}`;
+        row.className = 'cohort-dropdown-item';
+        row.classList.toggle('is-active', isActive);
+        row.setAttribute('role', 'option');
+        row.setAttribute('aria-selected', isActive);
 
         const label = document.createElement('span');
         label.textContent = cohort;
@@ -58,6 +134,7 @@ function renderCohorts(selectedCohort) {
         deleteBtn.className = 'cohort-dropdown-item-delete';
         deleteBtn.textContent = '×';
         deleteBtn.title = `Delete ${cohort}`;
+        deleteBtn.setAttribute('aria-label', `Delete ${cohort}`);
         deleteBtn.addEventListener('click', function(e) {
             e.stopPropagation();
             deleteCohort(cohort);
@@ -66,7 +143,7 @@ function renderCohorts(selectedCohort) {
 
         row.addEventListener('click', function() {
             selectCohort(cohort);
-            closeCohortDropdown();
+            setCohortDropdownOpen(false);
         });
         cohortDropdownMenu.appendChild(row);
     });
@@ -76,619 +153,343 @@ function renderCohorts(selectedCohort) {
     const addBtn = document.createElement('button');
     addBtn.type = 'button';
     addBtn.textContent = '+ Add cohort';
-    addBtn.addEventListener('click', function() {
-        addCohort();
-    });
+    addBtn.addEventListener('click', addCohort);
     addWrap.appendChild(addBtn);
     cohortDropdownMenu.appendChild(addWrap);
 }
 
-function getStudentsByCohort() {
-    const raw = localStorage.getItem(STUDENTS_BY_COHORT_STORAGE_KEY);
-    if (!raw) return {};
-    try {
-        const parsed = JSON.parse(raw);
-        return parsed && typeof parsed === 'object' ? parsed : {};
-    } catch (error) {
-        console.error('Error reading students-by-cohort from storage:', error);
-        return {};
-    }
-}
-
-function saveStudentsByCohort(map) {
-    localStorage.setItem(STUDENTS_BY_COHORT_STORAGE_KEY, JSON.stringify(map));
-}
-
-function getStoredStudents(cohort) {
-    const studentsByCohort = getStudentsByCohort();
-    const list = studentsByCohort[cohort];
-    if (Array.isArray(list)) {
-        return list.map(name => String(name || '').trim()).filter(Boolean);
-    }
-
-    // New cohorts start empty
-    studentsByCohort[cohort] = [];
-    saveStudentsByCohort(studentsByCohort);
-    return [];
-}
-
-function saveStudents(cohort, students) {
-    const studentsByCohort = getStudentsByCohort();
-    studentsByCohort[cohort] = students;
-    saveStudentsByCohort(studentsByCohort);
-}
-
-function getCurrentCohort() {
-    return currentCohort || '';
-}
-
-function closeCohortDropdown() {
-    if (!cohortControls || !cohortDropdownBtn) return;
-    cohortControls.classList.remove('is-open');
-    cohortDropdownBtn.setAttribute('aria-expanded', 'false');
-}
-
-function openCohortDropdown() {
-    if (!cohortControls || !cohortDropdownBtn) return;
-    cohortControls.classList.add('is-open');
-    cohortDropdownBtn.setAttribute('aria-expanded', 'true');
-}
-
-function toggleCohortDropdown() {
-    if (!cohortControls) return;
-    if (cohortControls.classList.contains('is-open')) {
-        closeCohortDropdown();
-    } else {
-        openCohortDropdown();
-    }
-}
-
+// Switch the form to a cohort ('' when there are none) and load its last saved values
 function selectCohort(cohort) {
     currentCohort = cohort;
-    renderCohorts(cohort);
-    renderStudents(getStoredStudents(cohort));
-    loadFormDataForCohort(cohort);
-    document.getElementById('outputContent').textContent = 'Fill in the form and click "Generate Update" to see the output here.';
-    document.getElementById('copyBtn').style.display = 'none';
-    document.getElementById('copyMarkdownBtn').style.display = 'none';
+    renderCohorts();
+    applyFormValues(getFormValuesForCohort(cohort));
+    resetOutput();
 }
 
 function addCohort() {
-    const name = prompt('Enter cohort name:');
+    const name = (prompt('Enter cohort name:') || '').trim();
     if (!name) return;
-    const normalized = name.trim();
-    if (!normalized) return;
 
     const cohorts = getStoredCohorts();
-    const existing = cohorts.find(c => c.toLowerCase() === normalized.toLowerCase());
-    if (existing) {
-        selectCohort(existing);
-        closeCohortDropdown();
-        return;
+    const existing = cohorts.find(c => c.toLowerCase() === name.toLowerCase());
+    if (!existing) {
+        cohorts.push(name);
+        writeStorage(COHORTS_STORAGE_KEY, cohorts);
     }
-
-    cohorts.push(normalized);
-    saveCohorts(cohorts);
-    selectCohort(normalized);
-    closeCohortDropdown();
+    selectCohort(existing || name);
+    setCohortDropdownOpen(false);
 }
 
 function deleteCohort(cohort) {
-    const cohorts = getStoredCohorts();
-    const shouldDelete = confirm(`Delete cohort "${cohort}" and all its saved data?`);
-    if (!shouldDelete) return;
+    if (!confirm(`Delete cohort "${cohort}" and all its saved data?`)) return;
 
-    const updatedCohorts = cohorts.filter(c => c !== cohort);
-    saveCohorts(updatedCohorts);
+    const cohorts = getStoredCohorts().filter(c => c !== cohort);
+    writeStorage(COHORTS_STORAGE_KEY, cohorts);
+    [STUDENTS_BY_COHORT_STORAGE_KEY, LAST_PROGRESS_BY_COHORT_STORAGE_KEY].forEach(key => {
+        const map = readCohortMap(key);
+        delete map[cohort];
+        writeStorage(key, map);
+    });
 
-    const studentsByCohort = getStudentsByCohort();
-    delete studentsByCohort[cohort];
-    saveStudentsByCohort(studentsByCohort);
-
-    const progressByCohort = getLastProgressByCohort();
-    delete progressByCohort[cohort];
-    saveLastProgressByCohort(progressByCohort);
-
-    const nextCohort = updatedCohorts.includes(currentCohort) ? currentCohort : updatedCohorts[0];
-    if (nextCohort) {
-        selectCohort(nextCohort);
+    // Deleting another cohort keeps the current form as is
+    if (cohorts.includes(currentCohort)) {
+        renderCohorts();
     } else {
-        currentCohort = '';
-        renderCohorts('');
-        renderStudents([]);
-        applyDefaultFormValues();
-        document.getElementById('outputContent').textContent = 'Fill in the form and click "Generate Update" to see the output here.';
-        document.getElementById('copyBtn').style.display = 'none';
-        document.getElementById('copyMarkdownBtn').style.display = 'none';
+        selectCohort(cohorts[0] || '');
     }
 }
 
-function deleteStudent(studentName) {
-    const cohort = getCurrentCohort();
-    const students = getStoredStudents(cohort);
-    const filtered = students.filter(name => name !== studentName);
-    saveStudents(cohort, filtered);
-    renderStudents(filtered);
-    updateAttendanceCount();
-}
+cohortDropdownBtn.addEventListener('click', function() {
+    setCohortDropdownOpen(!cohortControls.classList.contains('is-open'));
+});
 
-// Custom absentees picker (replaces native select styling - browser forces blue highlight)
-function initAbsenteesPicker() {
-    const students = getStoredStudents(getCurrentCohort());
-    renderStudents(students);
-}
+document.addEventListener('click', function(e) {
+    if (!cohortControls.contains(e.target)) {
+        setCohortDropdownOpen(false);
+    }
+});
 
-function renderStudents(students) {
-    const select = document.getElementById('absentees');
-    const picker = document.getElementById('absenteesPicker');
-    if (!select || !picker) return;
+// ---- Students ----
 
-    const previouslySelected = new Set(
-        Array.from(select.selectedOptions).map(option => option.value)
-    );
+// Custom picker instead of a native <select multiple>, which forces a blue highlight
+function renderStudents() {
+    studentPicker.innerHTML = '';
 
-    select.innerHTML = '';
-    picker.innerHTML = '';
-
-    students.forEach(studentName => {
-        const option = document.createElement('option');
-        option.value = studentName;
-        option.textContent = studentName;
-        option.selected = previouslySelected.has(studentName);
-        select.appendChild(option);
-
+    getStoredStudents(currentCohort).forEach(name => {
         const item = document.createElement('div');
-        item.className = 'absentees-picker-item';
-        item.dataset.value = studentName;
+        item.className = 'student-picker-item';
+        item.dataset.name = name;
         item.setAttribute('role', 'option');
-        item.setAttribute('aria-selected', option.selected);
 
         const nameSpan = document.createElement('span');
-        nameSpan.className = 'absentees-picker-name';
-        nameSpan.textContent = studentName;
+        nameSpan.className = 'student-picker-name';
+        nameSpan.textContent = name;
         item.appendChild(nameSpan);
 
         const deleteBtn = document.createElement('button');
         deleteBtn.type = 'button';
-        deleteBtn.className = 'absentees-picker-delete-btn';
-        deleteBtn.title = `Delete ${studentName}`;
-        deleteBtn.setAttribute('aria-label', `Delete ${studentName}`);
+        deleteBtn.className = 'student-picker-delete-btn';
         deleteBtn.textContent = '×';
+        deleteBtn.title = `Delete ${name}`;
+        deleteBtn.setAttribute('aria-label', `Delete ${name}`);
         deleteBtn.addEventListener('click', function(e) {
-            e.preventDefault();
             e.stopPropagation();
-            const shouldDelete = confirm(`Delete "${studentName}" from students list?`);
-            if (!shouldDelete) return;
-            deleteStudent(studentName);
+            if (confirm(`Delete "${name}" from students list?`)) {
+                deleteStudent(name);
+            }
         });
         item.appendChild(deleteBtn);
 
-        item.addEventListener('click', function(e) {
-            e.preventDefault();
-            option.selected = !option.selected;
-            item.classList.toggle('is-selected', option.selected);
-            item.setAttribute('aria-selected', option.selected);
-            updateAttendanceCount();
-            updateClearBtnLabel();
-            select.dispatchEvent(new Event('change'));
-        });
-        if (option.selected) item.classList.add('is-selected');
-        picker.appendChild(item);
-    });
-    updateClearBtnLabel();
-}
-
-function updateClearBtnLabel() {
-    if (!absenteesClearBtn) return;
-    const select = document.getElementById('absentees');
-    if (!select) return;
-    const anySelected = Array.from(select.options).some(opt => opt.selected);
-    absenteesClearBtn.textContent = anySelected ? 'Clear' : 'Select All';
-}
-
-const absenteesClearBtn = document.getElementById('absenteesClearBtn');
-if (absenteesClearBtn) {
-    absenteesClearBtn.addEventListener('click', function() {
-        const select = document.getElementById('absentees');
-        if (!select) return;
-        const anySelected = Array.from(select.options).some(opt => opt.selected);
-        Array.from(select.options).forEach(opt => { opt.selected = !anySelected; });
-        syncAbsenteesPickerFromSelect();
-        updateAttendanceCount();
-        updateClearBtnLabel();
-    });
-}
-
-const addStudentBtn = document.getElementById('addStudentBtn');
-if (addStudentBtn) {
-    addStudentBtn.addEventListener('click', function() {
-        const name = prompt('Enter student name:');
-        if (!name) return;
-        const normalized = name.trim();
-        if (!normalized) return;
-
-        const cohort = getCurrentCohort();
-        const students = getStoredStudents(cohort);
-        const exists = students.some(student => student.toLowerCase() === normalized.toLowerCase());
-        if (exists) return;
-
-        students.push(normalized);
-        saveStudents(cohort, students);
-        renderStudents(students);
-        updateAttendanceCount();
-    });
-}
-
-if (cohortDropdownBtn) {
-    cohortDropdownBtn.addEventListener('click', function() {
-        toggleCohortDropdown();
-    });
-}
-
-document.addEventListener('click', function(event) {
-    if (!cohortControls) return;
-    if (!cohortControls.contains(event.target)) {
-        closeCohortDropdown();
-    }
-});
-
-function syncAbsenteesPickerFromSelect() {
-    const select = document.getElementById('absentees');
-    const picker = document.getElementById('absenteesPicker');
-    if (!select || !picker) return;
-    Array.from(select.options).forEach((opt, i) => {
-        const item = picker.children[i];
-        if (item && item.dataset.value === opt.value) {
-            item.classList.toggle('is-selected', opt.selected);
-            item.setAttribute('aria-selected', opt.selected);
-        }
-    });
-}
-
-// Theme toggle functionality
-function initTheme() {
-    const savedTheme = localStorage.getItem('theme') || 'dark';
-    if (savedTheme === 'light') {
-        document.body.classList.add('light-mode');
-        document.getElementById('themeToggle').innerHTML = '<span class="theme-icon">🌙</span>';
-    } else {
-        document.body.classList.remove('light-mode');
-        document.getElementById('themeToggle').innerHTML = '<span class="theme-icon">☀️</span>';
-    }
-}
-
-document.getElementById('themeToggle').addEventListener('click', function() {
-    const isLightMode = document.body.classList.contains('light-mode');
-    
-    if (isLightMode) {
-        // Switch to dark mode
-        document.body.classList.remove('light-mode');
-        this.innerHTML = '<span class="theme-icon">☀️</span>';
-        localStorage.setItem('theme', 'dark');
-    } else {
-        // Switch to light mode
-        document.body.classList.add('light-mode');
-        this.innerHTML = '<span class="theme-icon">🌙</span>';
-        localStorage.setItem('theme', 'light');
-    }
-});
-
-// Initialize theme on page load
-initTheme();
-
-function getLastProgressByCohort() {
-    const raw = localStorage.getItem(LAST_PROGRESS_BY_COHORT_STORAGE_KEY);
-    if (!raw) return {};
-    try {
-        const parsed = JSON.parse(raw);
-        return parsed && typeof parsed === 'object' ? parsed : {};
-    } catch (error) {
-        console.error('Error reading last-progress-by-cohort from storage:', error);
-        return {};
-    }
-}
-
-function saveLastProgressByCohort(map) {
-    localStorage.setItem(LAST_PROGRESS_BY_COHORT_STORAGE_KEY, JSON.stringify(map));
-}
-
-// Save form data to localStorage
-function saveFormData() {
-    const cohort = getCurrentCohort();
-    if (!cohort) return;
-    const formData = {
-        week: document.getElementById('week').value,
-        day: document.getElementById('day').value,
-        sessionDate: document.getElementById('sessionDate').value,
-        sessionTime: document.getElementById('sessionTime').value,
-        topics: document.getElementById('topics').value,
-        tasks: document.getElementById('tasks').value,
-        presentStudents: Array.from(document.getElementById('absentees').selectedOptions).map(option => option.value)
-    };
-    const progressByCohort = getLastProgressByCohort();
-    progressByCohort[cohort] = formData;
-    saveLastProgressByCohort(progressByCohort);
-}
-
-function applyDefaultFormValues() {
-    document.getElementById('week').value = '0';
-    document.getElementById('day').value = '1';
-    document.getElementById('sessionTime').value = '1:30 PM - 4:30 PM';
-    document.getElementById('topics').value = '';
-    document.getElementById('tasks').value = '';
-    document.getElementById('sessionDate').value = new Date().toISOString().split('T')[0];
-
-    const absenteesSelectEl = document.getElementById('absentees');
-    Array.from(absenteesSelectEl.options).forEach(option => {
-        option.selected = false;
-    });
-    syncAbsenteesPickerFromSelect();
-    updateAttendanceCount();
-    updateClearBtnLabel();
-}
-
-// Load form data for selected cohort
-function loadFormDataForCohort(cohort) {
-    const progressByCohort = getLastProgressByCohort();
-    const formData = progressByCohort[cohort];
-
-    if (!formData) {
-        // Legacy fallback from older single form storage
-        const legacyRaw = localStorage.getItem('cfi_lastProgress');
-        if (legacyRaw) {
-            try {
-                const legacyFormData = JSON.parse(legacyRaw);
-                if (legacyFormData && typeof legacyFormData === 'object') {
-                    progressByCohort[cohort] = legacyFormData;
-                    saveLastProgressByCohort(progressByCohort);
-                    localStorage.removeItem('cfi_lastProgress');
-                    return loadFormDataForCohort(cohort);
-                }
-            } catch (error) {
-                console.error('Error reading legacy form data:', error);
+        item.addEventListener('click', function() {
+            if (presentStudents.has(name)) {
+                presentStudents.delete(name);
+            } else {
+                presentStudents.add(name);
             }
-        }
-        applyDefaultFormValues();
-        return false;
-    }
-
-    if (formData.week !== undefined) document.getElementById('week').value = formData.week;
-    if (formData.day !== undefined) document.getElementById('day').value = formData.day;
-    if (formData.sessionDate) document.getElementById('sessionDate').value = formData.sessionDate;
-    if (formData.sessionTime) document.getElementById('sessionTime').value = formData.sessionTime;
-    if (formData.topics !== undefined) document.getElementById('topics').value = formData.topics;
-    if (formData.tasks !== undefined) document.getElementById('tasks').value = formData.tasks;
-
-    const absenteesSelectEl = document.getElementById('absentees');
-    Array.from(absenteesSelectEl.options).forEach(option => {
-        option.selected = false;
+            updateStudentSelection();
+        });
+        studentPicker.appendChild(item);
     });
 
-    if (formData.presentStudents && Array.isArray(formData.presentStudents)) {
-        Array.from(absenteesSelectEl.options).forEach(option => {
-            option.selected = formData.presentStudents.includes(option.value);
-        });
-    } else if (formData.absentees && Array.isArray(formData.absentees)) {
-        Array.from(absenteesSelectEl.options).forEach(option => {
-            option.selected = !formData.absentees.includes(option.value);
-        });
-    }
-
-    syncAbsenteesPickerFromSelect();
-    updateAttendanceCount();
-    updateClearBtnLabel();
-    return true;
+    updateStudentSelection();
 }
 
-// Attendance calculation based on present selections
-const absenteesSelect = document.getElementById('absentees');
-
-function updateAttendanceCount() {
-    const selectedPresent = Array.from(absenteesSelect.selectedOptions).length;
-    return selectedPresent;
+function updateStudentSelection() {
+    let anyPresent = false;
+    for (const item of studentPicker.children) {
+        const isPresent = presentStudents.has(item.dataset.name);
+        item.classList.toggle('is-selected', isPresent);
+        item.setAttribute('aria-selected', isPresent);
+        anyPresent = anyPresent || isPresent;
+    }
+    toggleAllStudentsBtn.textContent = anyPresent ? 'Clear' : 'Select All';
 }
 
-// Update attendance when absentees selection changes
-absenteesSelect.addEventListener('change', updateAttendanceCount);
+function deleteStudent(name) {
+    saveStudents(currentCohort, getStoredStudents(currentCohort).filter(student => student !== name));
+    presentStudents.delete(name);
+    renderStudents();
+}
 
-// Set up cohorts and load selected cohort data
-(function() {
-    const cohorts = getStoredCohorts();
-    const initialCohort = cohorts[0];
-    if (initialCohort) {
-        selectCohort(initialCohort);
-    } else {
-        renderCohorts('');
-        renderStudents([]);
-        applyDefaultFormValues();
-    }
-})();
-
-// Logout functionality
-document.getElementById('logoutBtn').addEventListener('click', function() {
-    if (confirm('Are you sure you want to logout?')) {
-        // Clear authentication from localStorage
-        localStorage.removeItem('cfi_authenticated');
-        // Redirect to login page
-        window.location.href = 'login/';
-    }
-});
-
-document.getElementById('progressForm').addEventListener('submit', function(e) {
-    e.preventDefault();
-    
-    // Get form values
-    const cohort = getCurrentCohort();
-    if (!cohort) {
+addStudentBtn.addEventListener('click', function() {
+    if (!currentCohort) {
         alert('Please select a cohort first.');
         return;
     }
-    const week = document.getElementById('week').value;
-    const day = document.getElementById('day').value;
-    const sessionDate = document.getElementById('sessionDate').value;
-    const sessionTime = document.getElementById('sessionTime').value;
-    const topicsText = document.getElementById('topics').value;
-    const tasksText = document.getElementById('tasks').value;
-    const absenteesSelect = document.getElementById('absentees');
-    const presentStudents = Array.from(absenteesSelect.selectedOptions).map(option => option.value);
-    const attendance = presentStudents.length;
-    const allStudents = Array.from(absenteesSelect.options).map(option => option.value);
-    const absentees = allStudents.filter(name => !presentStudents.includes(name));
-    
-    // Process topics - split by newline and format as bullet points
-    const topics = topicsText.split('\n')
-        .map(line => line.trim())
-        .filter(line => line.length > 0)
-        .map(line => {
-            // Remove existing bullet points if present
-            return line.replace(/^[•\-\*]\s*/, '').trim();
-        });
-    
-    // Process tasks - split by newline and format as numbered list
-    const tasks = tasksText.split('\n')
-        .map(line => line.trim())
-        .filter(line => line.length > 0)
-        .map(line => {
-            // Remove existing numbering if present
-            return line.replace(/^\d+\.\s*/, '').trim();
-        });
-    
-    // Generate output
-    let output = `${cohort} - Daily Progress\n\n`;
-    output += `Week: ${week}\n`;
-    output += `Session: ${day}\n`;
-    output += `Attendance Count: ${attendance}\n`;
-    
-    // Format date for display
-    let formattedDate = '';
-    if (sessionDate) {
-        const dateObj = new Date(sessionDate + 'T00:00:00');
-        const options = { year: 'numeric', month: 'long', day: 'numeric' };
-        formattedDate = dateObj.toLocaleDateString('en-US', options);
-    }
-    
-    output += `Session Date: ${formattedDate || sessionDate}\n`;
-    output += `Session Time: ${sessionTime}\n\n`;
-    
-    if (topics.length > 0) {
-        output += 'Topics Covered:\n';
-        topics.forEach(topic => {
-            output += `• ${topic}\n`;
-        });
-        output += '\n';
-    }
-    
-    if (tasks.length > 0) {
-        output += 'Tasks & Todos:\n';
-        tasks.forEach((task, index) => {
-            output += `• ${task}\n`;
-        });
-        output += '\n';
-    }
-    
-    if (absentees.length > 0) {
-        output += 'Absentees:\n';
-        absentees.forEach(name => {
-            output += `• ${name}\n`;
-        });
-        output += '\n';
-    }
-    
-    const hasContent = topics.length > 0 || tasks.length > 0 || absentees.length > 0;
-    if (hasContent) {
-        output += '—\n';
-    }
-    output += 'Team - Code For India Foundation\n';
-    output += 'https://codeforindia.com\n';
-    
-    // Display output
-    document.getElementById('outputContent').textContent = output;
-    document.getElementById('copyBtn').style.display = 'block';
-    document.getElementById('copyMarkdownBtn').style.display = 'block';
-    
-    // Save form data to localStorage after successful generation
-    saveFormData();
+    const name = (prompt('Enter student name:') || '').trim();
+    if (!name) return;
+
+    const students = getStoredStudents(currentCohort);
+    if (students.some(student => student.toLowerCase() === name.toLowerCase())) return;
+
+    students.push(name);
+    saveStudents(currentCohort, students);
+    renderStudents();
 });
 
-// Copy to clipboard functionality
-document.getElementById('copyBtn').addEventListener('click', function() {
-    const outputText = document.getElementById('outputContent').textContent;
-    
-    navigator.clipboard.writeText(outputText).then(function() {
-        const btn = document.getElementById('copyBtn');
-        const originalText = btn.textContent;
-        btn.textContent = 'Copied!';
-        btn.style.background = '#218838';
-        
+toggleAllStudentsBtn.addEventListener('click', function() {
+    const students = getStoredStudents(currentCohort);
+    const anyPresent = students.some(name => presentStudents.has(name));
+    presentStudents = new Set(anyPresent ? [] : students);
+    updateStudentSelection();
+});
+
+// ---- Form ----
+
+function autoResize(textarea) {
+    textarea.style.height = 'auto';
+    // scrollHeight leaves out the border, which border-box sizing counts in height
+    textarea.style.height = textarea.scrollHeight + textarea.offsetHeight - textarea.clientHeight + 'px';
+}
+
+[topicsInput, tasksInput].forEach(textarea => {
+    textarea.addEventListener('input', () => autoResize(textarea));
+});
+
+// Local date as YYYY-MM-DD (toISOString() gives the UTC date, which can be yesterday)
+function todayDateString() {
+    const now = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+
+function defaultFormValues() {
+    return {
+        week: '0',
+        day: '1',
+        sessionDate: todayDateString(),
+        sessionTime: DEFAULT_SESSION_TIME,
+        topics: '',
+        tasks: '',
+        presentStudents: []
+    };
+}
+
+function readFormValues() {
+    return {
+        week: weekInput.value,
+        day: dayInput.value,
+        sessionDate: sessionDateInput.value,
+        sessionTime: sessionTimeInput.value,
+        topics: topicsInput.value,
+        tasks: tasksInput.value,
+        presentStudents: getStoredStudents(currentCohort).filter(name => presentStudents.has(name))
+    };
+}
+
+function applyFormValues(values) {
+    weekInput.value = values.week;
+    dayInput.value = values.day;
+    sessionDateInput.value = values.sessionDate;
+    sessionTimeInput.value = values.sessionTime;
+    topicsInput.value = values.topics;
+    tasksInput.value = values.tasks;
+    autoResize(topicsInput);
+    autoResize(tasksInput);
+    presentStudents = new Set(values.presentStudents);
+    renderStudents();
+}
+
+document.getElementById('clearBtn').addEventListener('click', function() {
+    if (confirm('Are you sure you want to clear all fields?')) {
+        applyFormValues(defaultFormValues());
+        resetOutput();
+    }
+});
+
+// ---- Output ----
+
+function toListItems(text) {
+    return text.split('\n')
+        .map(line => line.trim().replace(LIST_MARKER, ''))
+        .filter(Boolean);
+}
+
+function formatSessionDate(value) {
+    if (!value) return '';
+    const date = new Date(value + 'T00:00:00');
+    return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+}
+
+function formatUpdate(update, markdown) {
+    const field = (label, value) => (markdown ? `**${label}:** ${value}` : `${label}: ${value}`);
+    const lines = [
+        `${markdown ? '## ' : ''}${update.cohort} - Daily Progress`,
+        '',
+        field('Week', update.week),
+        field('Session', update.day),
+        field('Attendance Count', update.attendance),
+        field('Session Date', update.sessionDate),
+        field('Session Time', update.sessionTime),
+        ''
+    ];
+
+    const sections = [
+        ['Topics Covered:', update.topics],
+        ['Tasks & Todos:', update.tasks],
+        ['Absentees:', update.absentees]
+    ];
+    let hasContent = false;
+    sections.forEach(([title, items]) => {
+        if (items.length === 0) return;
+        lines.push(`${markdown ? '### ' : ''}${title}`);
+        items.forEach(item => lines.push(`${markdown ? '-' : '•'} ${item}`));
+        lines.push('');
+        hasContent = true;
+    });
+
+    if (hasContent) {
+        lines.push(markdown ? '---' : '—');
+    }
+    if (markdown) {
+        lines.push('**Team - Code For India Foundation**', '[Code For India](https://codeforindia.com)');
+    } else {
+        lines.push('Team - Code For India Foundation', 'https://codeforindia.com');
+    }
+    return lines.join('\n') + '\n';
+}
+
+function resetOutput() {
+    generatedUpdate = null;
+    outputContent.textContent = OUTPUT_PLACEHOLDER;
+    copyBtn.hidden = true;
+    copyMarkdownBtn.hidden = true;
+}
+
+progressForm.addEventListener('submit', function(e) {
+    e.preventDefault();
+
+    if (!currentCohort) {
+        alert('Please select a cohort first.');
+        return;
+    }
+
+    const values = readFormValues();
+    const update = {
+        cohort: currentCohort,
+        week: values.week,
+        day: values.day,
+        attendance: values.presentStudents.length,
+        sessionDate: formatSessionDate(values.sessionDate),
+        sessionTime: values.sessionTime,
+        topics: toListItems(values.topics),
+        tasks: toListItems(values.tasks),
+        absentees: getStoredStudents(currentCohort).filter(name => !presentStudents.has(name))
+    };
+
+    generatedUpdate = {
+        text: formatUpdate(update, false),
+        markdown: formatUpdate(update, true)
+    };
+    outputContent.textContent = generatedUpdate.text;
+    copyBtn.hidden = false;
+    copyMarkdownBtn.hidden = false;
+
+    saveFormValues(currentCohort, values);
+});
+
+function copyToClipboard(button, text) {
+    navigator.clipboard.writeText(text).then(function() {
+        // Keep the real label so a second click within 2s doesn't leave "Copied!" behind
+        button.dataset.label = button.dataset.label || button.textContent;
+        button.textContent = 'Copied!';
+        button.classList.add('copied');
+
         setTimeout(function() {
-            btn.textContent = originalText;
-            btn.style.background = '#28a745';
+            button.textContent = button.dataset.label;
+            button.classList.remove('copied');
         }, 2000);
     }).catch(function(err) {
         console.error('Failed to copy text: ', err);
         alert('Failed to copy to clipboard. Please select and copy manually.');
     });
+}
+
+copyBtn.addEventListener('click', () => copyToClipboard(copyBtn, generatedUpdate.text));
+copyMarkdownBtn.addEventListener('click', () => copyToClipboard(copyMarkdownBtn, generatedUpdate.markdown));
+
+// ---- Theme and logout ----
+
+function applyTheme(theme) {
+    const isLight = theme === 'light';
+    document.body.classList.toggle('light-mode', isLight);
+    themeToggle.querySelector('.theme-icon').textContent = isLight ? '🌙' : '☀️';
+}
+
+themeToggle.addEventListener('click', function() {
+    const theme = document.body.classList.contains('light-mode') ? 'dark' : 'light';
+    localStorage.setItem(THEME_STORAGE_KEY, theme);
+    applyTheme(theme);
 });
 
-// Copy markdown functionality
-document.getElementById('copyMarkdownBtn').addEventListener('click', function() {
-    const outputText = document.getElementById('outputContent').textContent;
-    
-    // Convert plain text to markdown format
-    let markdown = outputText
-        .replace(/^Team CFI - Daily Progress Update$/gm, '## Team CFI - Daily Progress Update')
-        .replace(/^Week: (.+)$/gm, '**Week:** $1')
-        .replace(/^Session: (.+)$/gm, '**Session:** $1')
-        .replace(/^Attendance Count: (.+)$/gm, '**Attendance Count:** $1')
-        .replace(/^Session Date: (.+)$/gm, '**Session Date:** $1')
-        .replace(/^Session Time: (.+)$/gm, '**Session Time:** $1')
-        .replace(/^Topics Covered:$/gm, '### Topics Covered:')
-        .replace(/^• (.+)$/gm, '- $1')
-        .replace(/^Tasks & Action Items:$/gm, '### Tasks & Action Items:')
-        .replace(/^(\d+)\. (.+)$/gm, '$1. $2')
-        .replace(/^Absentees:$/gm, '### Absentees:')
-        .replace(/^—$/gm, '---')
-        .replace(/^Team CFI$/gm, '**Team CFI**')
-        .replace(/^Code For India Foundation$/gm, 'Code For India Foundation')
-        .replace(/^(https:\/\/codeforindia\.com)$/gm, '[Code For India](https://codeforindia.com)');
-    
-    navigator.clipboard.writeText(markdown).then(function() {
-        const btn = document.getElementById('copyMarkdownBtn');
-        const originalText = btn.textContent;
-        btn.textContent = 'Copied!';
-        btn.style.background = '#138496';
-        
-        setTimeout(function() {
-            btn.textContent = originalText;
-            btn.style.background = '#17a2b8';
-        }, 2000);
-    }).catch(function(err) {
-        console.error('Failed to copy markdown: ', err);
-        alert('Failed to copy markdown to clipboard. Please select and copy manually.');
-    });
-});
-
-// Clear fields functionality
-document.getElementById('clearBtn').addEventListener('click', function() {
-    if (confirm('Are you sure you want to clear all fields?')) {
-        document.getElementById('week').value = '0';
-        document.getElementById('day').value = '1';
-        // Set today's date as default
-        const today = new Date().toISOString().split('T')[0];
-        document.getElementById('sessionDate').value = today;
-        document.getElementById('sessionTime').value = '1:30 PM - 4:30 PM';
-        document.getElementById('topics').value = '';
-        document.getElementById('tasks').value = '';
-        // Clear absentees selection (no default selections)
-        const absenteesSelect = document.getElementById('absentees');
-        Array.from(absenteesSelect.options).forEach(option => {
-            option.selected = false;
-        });
-        syncAbsenteesPickerFromSelect();
-        // Update attendance count after clearing absentees
-        updateAttendanceCount();
-        document.getElementById('outputContent').textContent = 'Fill in the form and click "Generate Update" to see the output here.';
-        document.getElementById('copyBtn').style.display = 'none';
-        document.getElementById('copyMarkdownBtn').style.display = 'none';
+document.getElementById('logoutBtn').addEventListener('click', function() {
+    if (confirm('Are you sure you want to logout?')) {
+        logout();
+        window.location.href = 'login/';
     }
 });
+
+// ---- Init ----
+
+applyTheme(localStorage.getItem(THEME_STORAGE_KEY));
+selectCohort(getStoredCohorts()[0] || '');

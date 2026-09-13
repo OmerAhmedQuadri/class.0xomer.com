@@ -17,7 +17,6 @@
     --border-focus: #8f11eb;
     --accent-color: #8f11eb;
     --accent-hover: #a83eef;
-    --accent-gradient: #8f11eb;
     --success-color: #3fb950;
     --shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
     --input-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
@@ -36,7 +35,6 @@ body.light-mode {
     --border-focus: #8f11eb;
     --accent-color: #8f11eb;
     --accent-hover: #a83eef;
-    --accent-gradient: #8f11eb;
     --success-color: #1a7f37;
     --shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
     --input-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
@@ -119,6 +117,13 @@ body {
     border-color: var(--border-focus);
 }
 
+.field-hint {
+    display: block;
+    margin-top: 5px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
 .hash-btn {
     width: 100%;
     padding: 14px;
@@ -181,6 +186,10 @@ body {
     min-height: 50px;
     display: flex;
     align-items: center;
+}
+
+.hash-output.is-error {
+    color: #dc3545;
 }
 
 .copy-hash-btn {

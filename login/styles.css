@@ -7,7 +7,6 @@
 :root {
     /* Dark mode (default) - GitHub-inspired */
     --bg-primary: #0d1117;
-    --bg-secondary: #161b22;
     --bg-container: #161b22;
     --bg-input: #161b22;
     --text-primary: #e6edf3;
@@ -17,7 +16,6 @@
     --border-focus: #8f11eb;
     --accent-color: #8f11eb;
     --accent-hover: #a83eef;
-    --accent-gradient: #8f11eb;
     --error-color: #f85149;
     --shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
     --input-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
@@ -26,7 +24,6 @@
 body.light-mode {
     /* Light mode */
     --bg-primary: #f6f8fa;
-    --bg-secondary: #ffffff;
     --bg-container: #ffffff;
     --bg-input: #ffffff;
     --text-primary: #24292f;
@@ -36,7 +33,6 @@ body.light-mode {
     --border-focus: #8f11eb;
     --accent-color: #8f11eb;
     --accent-hover: #a83eef;
-    --accent-gradient: #8f11eb;
     --error-color: #cf222e;
     --shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
     --input-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);

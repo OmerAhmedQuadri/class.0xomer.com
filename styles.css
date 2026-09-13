@@ -18,8 +18,6 @@
     --border-focus: #8f11eb;
     --accent-color: #8f11eb;
     --accent-hover: #a83eef;
-    --accent-gradient: #8f11eb;
-    --header-gradient: #8f11eb;
     --success-color: #3fb950;
     --danger-color: #f85149;
     --shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
@@ -40,8 +38,6 @@ body.light-mode {
     --border-focus: #8f11eb;
     --accent-color: #8f11eb;
     --accent-hover: #a83eef;
-    --accent-gradient: #8f11eb;
-    --header-gradient: #8f11eb;
     --success-color: #1a7f37;
     --danger-color: #cf222e;
     --shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
@@ -77,6 +73,7 @@ body {
     padding: 30px;
     text-align: center;
     position: relative;
+    flex-shrink: 0;
 }
 
 .header-content {
@@ -146,10 +143,6 @@ header h1 {
     flex-direction: column;
 }
 
-.form-section header {
-    flex-shrink: 0;
-}
-
 .form-section > form {
     flex: 1;
     padding: 30px;
@@ -190,6 +183,13 @@ header h1 {
     transition: color 0.3s ease;
 }
 
+.field-hint {
+    display: block;
+    margin-top: 5px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
 /* Number input spin buttons - subtle styling */
 .form-group input[type="number"]::-webkit-inner-spin-button,
 .form-group input[type="number"]::-webkit-outer-spin-button {
@@ -215,8 +215,7 @@ header h1 {
 .form-group input[type="text"],
 .form-group input[type="number"],
 .form-group input[type="date"],
-.form-group textarea,
-.form-group select {
+.form-group textarea {
     width: 100%;
     padding: 12px;
     border: 2px solid var(--border-color);
@@ -227,12 +226,6 @@ header h1 {
     color: var(--text-primary);
     transition: border-color 0.3s ease, background-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease;
     box-shadow: var(--input-shadow);
-}
-
-.form-group select option {
-    background: var(--bg-input);
-    color: var(--text-primary);
-    padding: 8px;
 }
 
 .cohort-controls {
@@ -355,8 +348,8 @@ header h1 {
     background: rgba(143, 17, 235, 0.12);
 }
 
-/* Custom absentees picker - native select has unstyled blue highlight */
-.absentees-label-row {
+/* Student attendance picker */
+.students-label-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -364,18 +357,17 @@ header h1 {
     margin-bottom: 8px;
 }
 
-.absentees-label-row label {
+.students-label-row label {
     margin-bottom: 0;
 }
 
-.absentees-actions {
+.students-actions {
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
 }
 
-.absentees-add-btn,
-.absentees-clear-btn {
+.students-action-btn {
     padding: 0.25rem 0.5rem;
     font-size: 0.75rem;
     background: transparent;
@@ -386,25 +378,11 @@ header h1 {
     transition: color 0.15s;
 }
 
-.absentees-add-btn:hover,
-.absentees-clear-btn:hover {
+.students-action-btn:hover {
     color: var(--text-primary);
 }
 
-.absentees-wrapper {
-    position: relative;
-}
-
-.absentees-select-hidden {
-    position: absolute;
-    left: -9999px;
-    width: 1px;
-    height: 1px;
-    opacity: 0;
-    pointer-events: none;
-}
-
-.absentees-picker {
+.student-picker {
     display: flex;
     flex-direction: column;
     gap: 2px;
@@ -421,7 +399,7 @@ header h1 {
     overflow-y: auto;
 }
 
-.absentees-picker-item {
+.student-picker-item {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -432,14 +410,14 @@ header h1 {
     transition: background 0.15s, color 0.15s;
 }
 
-.absentees-picker-name {
+.student-picker-name {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.absentees-picker-delete-btn {
+.student-picker-delete-btn {
     flex-shrink: 0;
     border: none;
     background: transparent;
@@ -453,29 +431,29 @@ header h1 {
     transition: opacity 0.12s, color 0.12s;
 }
 
-.absentees-picker-item:hover .absentees-picker-delete-btn {
+.student-picker-item:hover .student-picker-delete-btn {
     opacity: 1;
 }
 
-.absentees-picker-delete-btn:hover {
+.student-picker-delete-btn:hover {
     color: var(--danger-color);
 }
 
-.absentees-picker-item:hover {
+.student-picker-item:hover {
     background: rgba(143, 17, 235, 0.12);
 }
 
-.absentees-picker-item.is-selected {
+.student-picker-item.is-selected {
     background: rgba(143, 17, 235, 0.25);
 }
 
-.absentees-picker:focus-within {
+.student-picker:focus-within {
     outline: none;
     border-color: var(--border-focus);
     box-shadow: 0 0 0 2px rgba(143, 17, 235, 0.2), var(--input-shadow);
 }
 
-/* Absentees picker scrollbar */
+/* Scrollbars */
 *::-webkit-scrollbar {
     width: 8px;
 }
@@ -503,8 +481,7 @@ header h1 {
 .form-group input[type="text"]:focus,
 .form-group input[type="number"]:focus,
 .form-group input[type="date"]:focus,
-.form-group textarea:focus,
-.form-group select:focus {
+.form-group textarea:focus {
     outline: none;
     border-color: var(--border-focus);
     box-shadow: 0 0 0 2px rgba(143, 17, 235, 0.2), var(--input-shadow);
@@ -514,8 +491,7 @@ header h1 {
 .form-group input[type="text"]:hover,
 .form-group input[type="number"]:hover,
 .form-group input[type="date"]:hover,
-.form-group textarea:hover,
-.form-group select:hover {
+.form-group textarea:hover {
     border-color: var(--border-focus);
 }
 
@@ -653,6 +629,14 @@ header h1 {
 .copy-btn:active,
 .copy-markdown-btn:active {
     transform: scale(0.98);
+}
+
+.copy-btn.copied {
+    background: #2ea043;
+}
+
+.copy-markdown-btn.copied {
+    background: var(--accent-hover);
 }
 
 @media (max-width: 1024px) {

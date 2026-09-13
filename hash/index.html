@@ -20,12 +20,12 @@
                 </div>
                 <div class="form-group">
                     <label for="salt">Salt (optional):</label>
-                    <input type="text" id="salt" name="salt" placeholder="Leave empty to use default salt" value="secure_salt_key">
-                    <small style="color: var(--text-secondary); font-size: 12px; margin-top: 5px; display: block;">Default salt is pre-filled. Change if needed.</small>
+                    <input type="text" id="salt" name="salt" placeholder="Leave empty to use default salt">
+                    <small class="field-hint">Default salt is pre-filled. Change if needed.</small>
                 </div>
                 <button type="submit" class="hash-btn">Compute Hash</button>
             </form>
-            <div id="resultSection" style="display: none;">
+            <div id="resultSection" hidden>
                 <div class="result-box">
                     <h3>Generated Hash:</h3>
                     <div class="hash-output" id="hashOutput"></div>
@@ -34,6 +34,7 @@
             </div>
         </div>
     </div>
+    <script src="../auth.js"></script>
     <script src="script.js"></script>
 </body>
 </html>
