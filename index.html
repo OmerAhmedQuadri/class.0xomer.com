@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Team CFI - Daily Progress Update Generator</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container" id="mainContainer" style="display: none;">
+        <div class="main-content">
+            <div class="form-section">
+                <header>
+                    <div class="header-content">
+                        <div>
+                            <h1>Team CFI - Daily Progress Update</h1>
+                            <!-- <p class="subtitle">Generate your daily progress update in the standard format</p> -->
+                        </div>
+                        <div class="header-buttons">
+                            <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">
+                                <span class="theme-icon">☀️</span>
+                            </button>
+                            <button class="logout-btn" id="logoutBtn" aria-label="Logout" title="Logout">
+                                <span class="logout-icon">🚪</span>
+                            </button>
+                        </div>
+                    </div>
+                </header>
+                <form id="progressForm">
+                    <h2>Input Details</h2>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="cohort">Cohort:</label>
+                            <div class="cohort-controls" id="cohortControls">
+                                <button type="button" class="cohort-dropdown-btn" id="cohortDropdownBtn" aria-haspopup="listbox" aria-expanded="false">
+                                    <span id="cohortDropdownLabel">Select cohort</span>
+                                    <span class="cohort-caret">▾</span>
+                                </button>
+                                <div class="cohort-dropdown-menu" id="cohortDropdownMenu" role="listbox" aria-label="Cohorts"></div>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="week">Week:</label>
+                            <input type="number" id="week" name="week" min="0" value="0" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="day">Day:</label>
+                            <input type="number" id="day" name="day" min="1" value="1" required>
+                        </div>
+
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="sessionDate">Session Date:</label>
+                            <input type="date" id="sessionDate" name="sessionDate" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="sessionTime">Session Time:</label>
+                            <input type="text" id="sessionTime" name="sessionTime" placeholder="e.g., 1:30 PM - 4:30 PM" value="1:30 PM - 4:30 PM" required>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="topics">Topics Covered (one per line):</label>
+                        <textarea id="topics" name="topics" rows="4" placeholder="Enter topics, one per line. They will be formatted as bullet points.">Technical Orientation
+Program & Curriculum Breakdown
+How the Internet Works
+Submarine Cables and Global Connectivity
+Command Line Basics
+CLI vs GUI (Command Line Interface vs Graphical User Interface)</textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="tasks">Tasks & Todos (one per line):</label>
+                        <textarea id="tasks" name="tasks" rows="4" placeholder="Enter tasks, one per line. They will be formatted as a numbered list.">Prepare for JAM (Just A Minute) on "How the Internet Works".
+Add "Scholar at CFI A26" to your LinkedIn profile.
+Bring two notebooks from the next session onward.
+Create a Medium account for daily blog posting.
+Write and publish a blog on today's class.
+Deadline: 12-01-2026, 9:00 PM</textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <div class="absentees-label-row">
+                            <label for="absentees">Students Present:</label>
+                            <div class="absentees-actions">
+                                <button type="button" class="absentees-add-btn" id="addStudentBtn" title="Add student">Add</button>
+                                <button type="button" class="absentees-clear-btn" id="absenteesClearBtn" title="Clear selection">Clear</button>
+                            </div>
+                        </div>
+                        <div class="absentees-wrapper">
+                            <select id="absentees" name="absentees" multiple size="5" class="absentees-select-hidden" aria-hidden="true" tabindex="-1">
+                            </select>
+                            <div id="absenteesPicker" class="absentees-picker" role="listbox" aria-multiselectable="true" aria-label="Select absentees" tabindex="0"></div>
+                        </div>
+                        <small style="color: var(--text-secondary); font-size: 12px; margin-top: 5px; display: block;">Click names to mark present. Unselected students will be listed as absentees.</small>
+                    </div>
+
+                    <div class="form-buttons">
+                        <button type="submit" class="generate-btn">Generate Update</button>
+                        <button type="button" class="clear-btn" id="clearBtn">Clear Fields</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="output-section" id="outputSection">
+                <h2>Generated Output</h2>
+                <div class="output-container">
+                    <pre id="outputContent">Fill in the form and click "Generate Update" to see the output here.</pre>
+                    <div class="output-buttons">
+                        <button type="button" class="copy-btn" id="copyBtn" style="display: none;">Copy to Clipboard</button>
+                        <button type="button" class="copy-markdown-btn" id="copyMarkdownBtn" style="display: none;">Copy Markdown</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="auth.js"></script>
+    <script>
+        // Check authentication before showing content
+        (function() {
+            if (!isAuthenticated()) {
+                window.location.href = 'login/';
+            } else {
+                // Show content if authenticated
+                document.getElementById('mainContainer').style.display = 'block';
+            }
+        })();
+    </script>
+    <script src="script.js"></script>
+</body>
+</html>

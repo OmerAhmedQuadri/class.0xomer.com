@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hash Generator - Team CFI</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="hash-container">
+        <div class="hash-box">
+            <div class="hash-header">
+                <h1>🔐 Hash Generator</h1>
+                <p class="subtitle">Compute SHA-256 hash with salt</p>
+            </div>
+            <form id="hashForm">
+                <div class="form-group">
+                    <label for="password">Password:</label>
+                    <input type="text" id="password" name="password" placeholder="Enter password to hash" required autofocus>
+                </div>
+                <div class="form-group">
+                    <label for="salt">Salt (optional):</label>
+                    <input type="text" id="salt" name="salt" placeholder="Leave empty to use default salt" value="secure_salt_key">
+                    <small style="color: var(--text-secondary); font-size: 12px; margin-top: 5px; display: block;">Default salt is pre-filled. Change if needed.</small>
+                </div>
+                <button type="submit" class="hash-btn">Compute Hash</button>
+            </form>
+            <div id="resultSection" style="display: none;">
+                <div class="result-box">
+                    <h3>Generated Hash:</h3>
+                    <div class="hash-output" id="hashOutput"></div>
+                    <button type="button" class="copy-hash-btn" id="copyHashBtn">Copy Hash</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>
