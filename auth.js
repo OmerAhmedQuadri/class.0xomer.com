@@ -5,7 +5,7 @@
 const SALT = 'secure_salt_key';
 const STORED_PASSWORD_HASH = 'b2af8242cfd88c01dc12b361760ecf9add727fa1ff89f29544626614fce8cab6';
 const CORRECT_USERNAME = 'admin';
-const AUTH_STORAGE_KEY = 'cfi_authenticated';
+const AUTH_STORAGE_KEY = 'dailyProgress.authenticated';
 
 /**
  * Hash a password using SHA-256 with salt

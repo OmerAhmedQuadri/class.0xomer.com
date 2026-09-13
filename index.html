@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Team CFI - Daily Progress Update Generator</title>
+    <title>Daily Progress Update</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -13,7 +13,7 @@
                 <header>
                     <div class="header-content">
                         <div>
-                            <h1>Team CFI - Daily Progress Update</h1>
+                            <h1>Daily Progress Update</h1>
                         </div>
                         <div class="header-buttons">
                             <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">
@@ -80,6 +80,12 @@
                         </div>
                         <div id="studentPicker" class="student-picker" role="listbox" aria-multiselectable="true" aria-labelledby="studentsLabel" tabindex="0"></div>
                         <small class="field-hint">Click names to mark present. Unselected students will be listed as absentees.</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="footer">Footer:</label>
+                        <textarea id="footer" name="footer" rows="2" placeholder="e.g.&#10;Team - Your Institute&#10;https://example.org"></textarea>
+                        <small class="field-hint">Saved for this cohort and added to the end of every update. Leave empty for no footer.</small>
                     </div>
 
                     <div class="form-buttons">

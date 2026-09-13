@@ -1,8 +1,5 @@
-const COHORTS_STORAGE_KEY = 'cfi_cohorts';
-const STUDENTS_BY_COHORT_STORAGE_KEY = 'cfi_students_by_cohort';
-const LAST_PROGRESS_BY_COHORT_STORAGE_KEY = 'cfi_lastProgress_by_cohort';
-// Form data saved before cohorts existed; migrated into the first cohort that loads
-const LEGACY_PROGRESS_STORAGE_KEY = 'cfi_lastProgress';
+const DATA_STORAGE_KEY = 'dailyProgress.data';
+const DATA_VERSION = 2;
 const THEME_STORAGE_KEY = 'theme';
 
 const DEFAULT_SESSION_TIME = '1:30 PM - 4:30 PM';
@@ -21,6 +18,7 @@ const sessionDateInput = document.getElementById('sessionDate');
 const sessionTimeInput = document.getElementById('sessionTime');
 const topicsInput = document.getElementById('topics');
 const tasksInput = document.getElementById('tasks');
+const footerInput = document.getElementById('footer');
 const studentPicker = document.getElementById('studentPicker');
 const addStudentBtn = document.getElementById('addStudentBtn');
 const toggleAllStudentsBtn = document.getElementById('toggleAllStudentsBtn');
@@ -29,81 +27,160 @@ const copyBtn = document.getElementById('copyBtn');
 const copyMarkdownBtn = document.getElementById('copyMarkdownBtn');
 const themeToggle = document.getElementById('themeToggle');
 
-let currentCohort = '';
-let presentStudents = new Set();
+let currentCohortId = '';
+let presentStudentIds = new Set();
 let generatedUpdate = null; // { text, markdown } for the copy buttons
 
 // ---- Storage ----
+//
+// All data is saved under one key:
+// {
+//   version: 2,
+//   cohorts: [{
+//     id, name, footer,
+//     students: [{ id, name }],
+//     lastSession: { week, day, sessionDate, sessionTime, topics, tasks, presentStudentIds } or null
+//   }]
+// }
 
-function readStorage(key, fallback) {
+const isObject = value => value !== null && typeof value === 'object' && !Array.isArray(value);
+
+// Trim and collapse repeated spaces, so " A26 " is stored and compared as "A26"
+function cleanName(value) {
+    return String(value ?? '').trim().replace(/\s+/g, ' ');
+}
+
+function sameName(a, b) {
+    return a.toLowerCase() === b.toLowerCase();
+}
+
+function createId() {
+    return crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2);
+}
+
+function readJSON(key) {
     const raw = localStorage.getItem(key);
-    if (!raw) return fallback;
+    if (!raw) return null;
     try {
-        return JSON.parse(raw) ?? fallback;
+        return JSON.parse(raw);
     } catch (error) {
         console.error(`Error reading ${key} from storage:`, error);
-        return fallback;
+        return null;
     }
 }
 
-function writeStorage(key, value) {
-    localStorage.setItem(key, JSON.stringify(value));
+// Drop anything malformed or duplicated so the rest of the code can trust the shape
+function normalizeData(raw) {
+    const cohorts = [];
+    (Array.isArray(raw?.cohorts) ? raw.cohorts : []).forEach(cohort => {
+        const name = cleanName(cohort?.name);
+        if (!isObject(cohort) || !cohort.id || !name || cohorts.some(c => sameName(c.name, name))) return;
+
+        const students = [];
+        (Array.isArray(cohort.students) ? cohort.students : []).forEach(student => {
+            const studentName = cleanName(student?.name);
+            if (!isObject(student) || !student.id || !studentName || students.some(s => sameName(s.name, studentName))) return;
+            students.push({ id: String(student.id), name: studentName });
+        });
+
+        cohorts.push({
+            id: String(cohort.id),
+            name,
+            footer: typeof cohort.footer === 'string' ? cohort.footer : '',
+            students,
+            lastSession: isObject(cohort.lastSession) ? cohort.lastSession : null
+        });
+    });
+    return { version: DATA_VERSION, cohorts };
 }
 
-// Maps keyed by cohort name
-function readCohortMap(key) {
-    const map = readStorage(key, {});
-    return typeof map === 'object' && !Array.isArray(map) ? map : {};
+function loadData() {
+    const stored = readJSON(DATA_STORAGE_KEY);
+    return stored ? normalizeData(stored) : migrateLegacyData() || normalizeData(null);
 }
 
-function toNameList(value) {
-    return Array.isArray(value) ? value.map(item => String(item || '').trim()).filter(Boolean) : [];
+function saveData(data) {
+    localStorage.setItem(DATA_STORAGE_KEY, JSON.stringify(data));
 }
 
-function getStoredCohorts() {
-    return toNameList(readStorage(COHORTS_STORAGE_KEY, []));
+// Re-read before each change so edits made in another open tab aren't overwritten
+function updateData(change) {
+    const data = loadData();
+    change(data);
+    saveData(data);
+    return data;
 }
 
-function getStoredStudents(cohort) {
-    return toNameList(readCohortMap(STUDENTS_BY_COHORT_STORAGE_KEY)[cohort]);
+function findCohort(data, id) {
+    return data.cohorts.find(cohort => cohort.id === id);
 }
 
-function saveStudents(cohort, students) {
-    const studentsByCohort = readCohortMap(STUDENTS_BY_COHORT_STORAGE_KEY);
-    studentsByCohort[cohort] = students;
-    writeStorage(STUDENTS_BY_COHORT_STORAGE_KEY, studentsByCohort);
+function currentStudents() {
+    return findCohort(loadData(), currentCohortId)?.students || [];
 }
 
-function saveFormValues(cohort, values) {
-    const progressByCohort = readCohortMap(LAST_PROGRESS_BY_COHORT_STORAGE_KEY);
-    progressByCohort[cohort] = values;
-    writeStorage(LAST_PROGRESS_BY_COHORT_STORAGE_KEY, progressByCohort);
+// ---- One-time migration from the storage format used before version 2 ----
+
+const LEGACY_STORAGE_KEYS = {
+    cohorts: 'cfi_cohorts',
+    studentsByCohort: 'cfi_students_by_cohort',
+    progressByCohort: 'cfi_lastProgress_by_cohort',
+    progress: 'cfi_lastProgress', // single form saved before cohorts existed
+    authenticated: 'cfi_authenticated'
+};
+// The footer used to be hardcoded, so migrated cohorts keep it and their updates don't change
+const LEGACY_FOOTER = 'Team - Code For India Foundation\nhttps://codeforindia.com';
+
+function migrateLegacyData() {
+    const keys = Object.values(LEGACY_STORAGE_KEYS);
+    if (keys.every(key => localStorage.getItem(key) === null)) return null;
+
+    const cohortNames = readJSON(LEGACY_STORAGE_KEYS.cohorts);
+    const studentsByCohort = readJSON(LEGACY_STORAGE_KEYS.studentsByCohort) || {};
+    const progressByCohort = readJSON(LEGACY_STORAGE_KEYS.progressByCohort) || {};
+    const legacyProgress = readJSON(LEGACY_STORAGE_KEYS.progress);
+
+    const data = normalizeData({
+        cohorts: (Array.isArray(cohortNames) ? cohortNames : []).map((name, index) => {
+            const studentNames = Array.isArray(studentsByCohort[name]) ? studentsByCohort[name] : [];
+            const students = studentNames.map(studentName => ({ id: createId(), name: studentName }));
+
+            let progress = progressByCohort[name];
+            // The old app moved the pre-cohort form into whichever cohort opened first
+            if (!isObject(progress) && index === 0) progress = legacyProgress;
+
+            return {
+                id: createId(),
+                name,
+                footer: LEGACY_FOOTER,
+                students,
+                lastSession: isObject(progress) ? legacySession(progress, students) : null
+            };
+        })
+    });
+
+    saveData(data);
+    keys.forEach(key => localStorage.removeItem(key));
+    return data;
 }
 
-function getFormValuesForCohort(cohort) {
-    if (!cohort) return defaultFormValues();
-
-    let saved = readCohortMap(LAST_PROGRESS_BY_COHORT_STORAGE_KEY)[cohort];
-    if (!saved) {
-        const legacy = readStorage(LEGACY_PROGRESS_STORAGE_KEY, null);
-        if (legacy && typeof legacy === 'object') {
-            saved = legacy;
-            saveFormValues(cohort, legacy);
-            localStorage.removeItem(LEGACY_PROGRESS_STORAGE_KEY);
-        }
+function legacySession(progress, students) {
+    let presentNames = [];
+    if (Array.isArray(progress.presentStudents)) {
+        presentNames = progress.presentStudents;
+    } else if (Array.isArray(progress.absentees)) {
+        // Even older saves stored absentees instead of present students
+        presentNames = students.map(student => student.name).filter(name => !progress.absentees.includes(name));
     }
-    if (!saved || typeof saved !== 'object') return defaultFormValues();
-
-    const values = { ...defaultFormValues(), ...saved };
-    if (Array.isArray(saved.presentStudents)) {
-        values.presentStudents = saved.presentStudents;
-    } else if (Array.isArray(saved.absentees)) {
-        // Older saves stored absentees instead of present students
-        values.presentStudents = getStoredStudents(cohort).filter(name => !saved.absentees.includes(name));
-    } else {
-        values.presentStudents = [];
-    }
-    return values;
+    return {
+        week: progress.week,
+        day: progress.day,
+        sessionDate: progress.sessionDate,
+        sessionTime: progress.sessionTime,
+        topics: progress.topics,
+        tasks: progress.tasks,
+        presentStudentIds: students.filter(student => presentNames.includes(student.name)).map(student => student.id)
+    };
 }
 
 // ---- Cohorts ----
@@ -113,12 +190,13 @@ function setCohortDropdownOpen(isOpen) {
     cohortDropdownBtn.setAttribute('aria-expanded', isOpen);
 }
 
-function renderCohorts() {
-    cohortDropdownLabel.textContent = currentCohort || 'Add cohort';
+function renderCohorts(data) {
+    const current = findCohort(data, currentCohortId);
+    cohortDropdownLabel.textContent = current ? current.name : 'Add cohort';
     cohortDropdownMenu.innerHTML = '';
 
-    getStoredCohorts().forEach(cohort => {
-        const isActive = cohort === currentCohort;
+    data.cohorts.forEach(cohort => {
+        const isActive = cohort.id === currentCohortId;
         const row = document.createElement('div');
         row.className = 'cohort-dropdown-item';
         row.classList.toggle('is-active', isActive);
@@ -126,23 +204,23 @@ function renderCohorts() {
         row.setAttribute('aria-selected', isActive);
 
         const label = document.createElement('span');
-        label.textContent = cohort;
+        label.textContent = cohort.name;
         row.appendChild(label);
 
         const deleteBtn = document.createElement('button');
         deleteBtn.type = 'button';
         deleteBtn.className = 'cohort-dropdown-item-delete';
         deleteBtn.textContent = '×';
-        deleteBtn.title = `Delete ${cohort}`;
-        deleteBtn.setAttribute('aria-label', `Delete ${cohort}`);
+        deleteBtn.title = `Delete ${cohort.name}`;
+        deleteBtn.setAttribute('aria-label', `Delete ${cohort.name}`);
         deleteBtn.addEventListener('click', function(e) {
             e.stopPropagation();
-            deleteCohort(cohort);
+            deleteCohort(cohort.id);
         });
         row.appendChild(deleteBtn);
 
         row.addEventListener('click', function() {
-            selectCohort(cohort);
+            selectCohort(cohort.id);
             setCohortDropdownOpen(false);
         });
         cohortDropdownMenu.appendChild(row);
@@ -158,44 +236,54 @@ function renderCohorts() {
     cohortDropdownMenu.appendChild(addWrap);
 }
 
-// Switch the form to a cohort ('' when there are none) and load its last saved values
-function selectCohort(cohort) {
-    currentCohort = cohort;
-    renderCohorts();
-    applyFormValues(getFormValuesForCohort(cohort));
+// Switch the form to a cohort ('' when there are none) and load its last session
+function selectCohort(id) {
+    const data = loadData();
+    const cohort = findCohort(data, id);
+    currentCohortId = cohort ? cohort.id : '';
+    renderCohorts(data);
+
+    footerInput.value = cohort ? cohort.footer : '';
+    footerInput.disabled = !cohort;
+    autoResize(footerInput);
+
+    applySessionValues(sessionValuesFor(cohort));
     resetOutput();
 }
 
 function addCohort() {
-    const name = (prompt('Enter cohort name:') || '').trim();
+    const name = cleanName(prompt('Enter cohort name:'));
     if (!name) return;
 
-    const cohorts = getStoredCohorts();
-    const existing = cohorts.find(c => c.toLowerCase() === name.toLowerCase());
-    if (!existing) {
-        cohorts.push(name);
-        writeStorage(COHORTS_STORAGE_KEY, cohorts);
+    const existing = loadData().cohorts.find(cohort => sameName(cohort.name, name));
+    if (existing) {
+        alert(`A cohort named "${existing.name}" already exists.`);
+        selectCohort(existing.id);
+    } else {
+        const id = createId();
+        updateData(data => {
+            // Start from the current cohort's footer, since new cohorts usually belong to the same institute
+            const footer = findCohort(data, currentCohortId)?.footer || '';
+            data.cohorts.push({ id, name, footer, students: [], lastSession: null });
+        });
+        selectCohort(id);
     }
-    selectCohort(existing || name);
     setCohortDropdownOpen(false);
 }
 
-function deleteCohort(cohort) {
-    if (!confirm(`Delete cohort "${cohort}" and all its saved data?`)) return;
+function deleteCohort(id) {
+    const cohort = findCohort(loadData(), id);
+    if (!cohort || !confirm(`Delete cohort "${cohort.name}" and all its saved data?`)) return;
 
-    const cohorts = getStoredCohorts().filter(c => c !== cohort);
-    writeStorage(COHORTS_STORAGE_KEY, cohorts);
-    [STUDENTS_BY_COHORT_STORAGE_KEY, LAST_PROGRESS_BY_COHORT_STORAGE_KEY].forEach(key => {
-        const map = readCohortMap(key);
-        delete map[cohort];
-        writeStorage(key, map);
+    const data = updateData(d => {
+        d.cohorts = d.cohorts.filter(c => c.id !== id);
     });
 
     // Deleting another cohort keeps the current form as is
-    if (cohorts.includes(currentCohort)) {
-        renderCohorts();
+    if (findCohort(data, currentCohortId)) {
+        renderCohorts(data);
     } else {
-        selectCohort(cohorts[0] || '');
+        selectCohort(data.cohorts[0]?.id || '');
     }
 }
 
@@ -215,36 +303,36 @@ document.addEventListener('click', function(e) {
 function renderStudents() {
     studentPicker.innerHTML = '';
 
-    getStoredStudents(currentCohort).forEach(name => {
+    currentStudents().forEach(student => {
         const item = document.createElement('div');
         item.className = 'student-picker-item';
-        item.dataset.name = name;
+        item.dataset.id = student.id;
         item.setAttribute('role', 'option');
 
         const nameSpan = document.createElement('span');
         nameSpan.className = 'student-picker-name';
-        nameSpan.textContent = name;
+        nameSpan.textContent = student.name;
         item.appendChild(nameSpan);
 
         const deleteBtn = document.createElement('button');
         deleteBtn.type = 'button';
         deleteBtn.className = 'student-picker-delete-btn';
         deleteBtn.textContent = '×';
-        deleteBtn.title = `Delete ${name}`;
-        deleteBtn.setAttribute('aria-label', `Delete ${name}`);
+        deleteBtn.title = `Delete ${student.name}`;
+        deleteBtn.setAttribute('aria-label', `Delete ${student.name}`);
         deleteBtn.addEventListener('click', function(e) {
             e.stopPropagation();
-            if (confirm(`Delete "${name}" from students list?`)) {
-                deleteStudent(name);
+            if (confirm(`Delete "${student.name}" from students list?`)) {
+                deleteStudent(student.id);
             }
         });
         item.appendChild(deleteBtn);
 
         item.addEventListener('click', function() {
-            if (presentStudents.has(name)) {
-                presentStudents.delete(name);
+            if (presentStudentIds.has(student.id)) {
+                presentStudentIds.delete(student.id);
             } else {
-                presentStudents.add(name);
+                presentStudentIds.add(student.id);
             }
             updateStudentSelection();
         });
@@ -257,7 +345,7 @@ function renderStudents() {
 function updateStudentSelection() {
     let anyPresent = false;
     for (const item of studentPicker.children) {
-        const isPresent = presentStudents.has(item.dataset.name);
+        const isPresent = presentStudentIds.has(item.dataset.id);
         item.classList.toggle('is-selected', isPresent);
         item.setAttribute('aria-selected', isPresent);
         anyPresent = anyPresent || isPresent;
@@ -265,32 +353,43 @@ function updateStudentSelection() {
     toggleAllStudentsBtn.textContent = anyPresent ? 'Clear' : 'Select All';
 }
 
-function deleteStudent(name) {
-    saveStudents(currentCohort, getStoredStudents(currentCohort).filter(student => student !== name));
-    presentStudents.delete(name);
+function deleteStudent(id) {
+    updateData(data => {
+        const cohort = findCohort(data, currentCohortId);
+        if (!cohort) return;
+        cohort.students = cohort.students.filter(student => student.id !== id);
+        if (Array.isArray(cohort.lastSession?.presentStudentIds)) {
+            cohort.lastSession.presentStudentIds = cohort.lastSession.presentStudentIds.filter(studentId => studentId !== id);
+        }
+    });
+    presentStudentIds.delete(id);
     renderStudents();
 }
 
 addStudentBtn.addEventListener('click', function() {
-    if (!currentCohort) {
+    if (!currentCohortId) {
         alert('Please select a cohort first.');
         return;
     }
-    const name = (prompt('Enter student name:') || '').trim();
+    const name = cleanName(prompt('Enter student name:'));
     if (!name) return;
 
-    const students = getStoredStudents(currentCohort);
-    if (students.some(student => student.toLowerCase() === name.toLowerCase())) return;
+    const existing = currentStudents().find(student => sameName(student.name, name));
+    if (existing) {
+        alert(`"${existing.name}" is already in this cohort.`);
+        return;
+    }
 
-    students.push(name);
-    saveStudents(currentCohort, students);
+    updateData(data => {
+        findCohort(data, currentCohortId)?.students.push({ id: createId(), name });
+    });
     renderStudents();
 });
 
 toggleAllStudentsBtn.addEventListener('click', function() {
-    const students = getStoredStudents(currentCohort);
-    const anyPresent = students.some(name => presentStudents.has(name));
-    presentStudents = new Set(anyPresent ? [] : students);
+    const ids = currentStudents().map(student => student.id);
+    const anyPresent = ids.some(id => presentStudentIds.has(id));
+    presentStudentIds = new Set(anyPresent ? [] : ids);
     updateStudentSelection();
 });
 
@@ -302,7 +401,7 @@ function autoResize(textarea) {
     textarea.style.height = textarea.scrollHeight + textarea.offsetHeight - textarea.clientHeight + 'px';
 }
 
-[topicsInput, tasksInput].forEach(textarea => {
+[topicsInput, tasksInput, footerInput].forEach(textarea => {
     textarea.addEventListener('input', () => autoResize(textarea));
 });
 
@@ -313,7 +412,7 @@ function todayDateString() {
     return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }
 
-function defaultFormValues() {
+function defaultSessionValues() {
     return {
         week: '0',
         day: '1',
@@ -321,11 +420,22 @@ function defaultFormValues() {
         sessionTime: DEFAULT_SESSION_TIME,
         topics: '',
         tasks: '',
-        presentStudents: []
+        presentStudentIds: []
     };
 }
 
-function readFormValues() {
+// Saved values replace the defaults field by field, so partial or older saves still load
+function sessionValuesFor(cohort) {
+    const values = defaultSessionValues();
+    const saved = cohort?.lastSession || {};
+    Object.keys(values).forEach(key => {
+        if (saved[key] !== undefined && saved[key] !== null) values[key] = saved[key];
+    });
+    if (!Array.isArray(values.presentStudentIds)) values.presentStudentIds = [];
+    return values;
+}
+
+function readSessionValues() {
     return {
         week: weekInput.value,
         day: dayInput.value,
@@ -333,11 +443,11 @@ function readFormValues() {
         sessionTime: sessionTimeInput.value,
         topics: topicsInput.value,
         tasks: tasksInput.value,
-        presentStudents: getStoredStudents(currentCohort).filter(name => presentStudents.has(name))
+        presentStudentIds: currentStudents().map(student => student.id).filter(id => presentStudentIds.has(id))
     };
 }
 
-function applyFormValues(values) {
+function applySessionValues(values) {
     weekInput.value = values.week;
     dayInput.value = values.day;
     sessionDateInput.value = values.sessionDate;
@@ -346,13 +456,21 @@ function applyFormValues(values) {
     tasksInput.value = values.tasks;
     autoResize(topicsInput);
     autoResize(tasksInput);
-    presentStudents = new Set(values.presentStudents);
+    presentStudentIds = new Set(values.presentStudentIds);
     renderStudents();
 }
 
+// The footer belongs to the cohort, so it's saved as you type rather than on Generate
+footerInput.addEventListener('input', function() {
+    updateData(data => {
+        const cohort = findCohort(data, currentCohortId);
+        if (cohort) cohort.footer = footerInput.value;
+    });
+});
+
 document.getElementById('clearBtn').addEventListener('click', function() {
-    if (confirm('Are you sure you want to clear all fields?')) {
-        applyFormValues(defaultFormValues());
+    if (confirm('Are you sure you want to clear all fields? The footer is kept.')) {
+        applySessionValues(defaultSessionValues());
         resetOutput();
     }
 });
@@ -398,15 +516,17 @@ function formatUpdate(update, markdown) {
         hasContent = true;
     });
 
-    if (hasContent) {
-        lines.push(markdown ? '---' : '—');
+    // The footer is used as written, in both formats
+    const footer = update.footer.trim();
+    if (footer) {
+        if (hasContent) {
+            lines.push(markdown ? '---' : '—');
+        }
+        lines.push(...footer.split('\n').map(line => line.trimEnd()));
     }
-    if (markdown) {
-        lines.push('**Team - Code For India Foundation**', '[Code For India](https://codeforindia.com)');
-    } else {
-        lines.push('Team - Code For India Foundation', 'https://codeforindia.com');
-    }
-    return lines.join('\n') + '\n';
+
+    // Without a footer the last section leaves a blank line; end with exactly one newline
+    return lines.join('\n').replace(/\n*$/, '\n');
 }
 
 function resetOutput() {
@@ -419,22 +539,24 @@ function resetOutput() {
 progressForm.addEventListener('submit', function(e) {
     e.preventDefault();
 
-    if (!currentCohort) {
+    const cohort = findCohort(loadData(), currentCohortId);
+    if (!cohort) {
         alert('Please select a cohort first.');
         return;
     }
 
-    const values = readFormValues();
+    const values = readSessionValues();
     const update = {
-        cohort: currentCohort,
+        cohort: cohort.name,
         week: values.week,
         day: values.day,
-        attendance: values.presentStudents.length,
+        attendance: values.presentStudentIds.length,
         sessionDate: formatSessionDate(values.sessionDate),
         sessionTime: values.sessionTime,
         topics: toListItems(values.topics),
         tasks: toListItems(values.tasks),
-        absentees: getStoredStudents(currentCohort).filter(name => !presentStudents.has(name))
+        absentees: cohort.students.filter(student => !presentStudentIds.has(student.id)).map(student => student.name),
+        footer: footerInput.value
     };
 
     generatedUpdate = {
@@ -445,7 +567,10 @@ progressForm.addEventListener('submit', function(e) {
     copyBtn.hidden = false;
     copyMarkdownBtn.hidden = false;
 
-    saveFormValues(currentCohort, values);
+    updateData(data => {
+        const saved = findCohort(data, cohort.id);
+        if (saved) saved.lastSession = values;
+    });
 });
 
 function copyToClipboard(button, text) {
@@ -492,4 +617,4 @@ document.getElementById('logoutBtn').addEventListener('click', function() {
 // ---- Init ----
 
 applyTheme(localStorage.getItem(THEME_STORAGE_KEY));
-selectCohort(getStoredCohorts()[0] || '');
+selectCohort(loadData().cohorts[0]?.id || '');

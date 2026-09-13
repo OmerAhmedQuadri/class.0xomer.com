@@ -1,6 +1,6 @@
 # class.0xomer.com
 
-Generates the daily progress update that Team CFI (Code For India Foundation) posts after each cohort session.
+Generates a daily progress update for a class cohort: session details, topics, tasks, attendance and a footer of your choice, ready to paste as plain text or Markdown. Any institute can use it.
 
 ## Pages
 
@@ -22,7 +22,22 @@ Then open http://localhost:8000. Opening `index.html` straight from disk doesn't
 
 ## Where data lives
 
-Cohorts, student lists and each cohort's most recent form inputs are saved in the browser's `localStorage`. Nothing is sent to a server, so every browser keeps its own copy, and clearing site data erases it.
+Everything is saved in the browser's `localStorage` under one key, `dailyProgress.data`:
+
+```js
+{
+  version: 2,
+  cohorts: [{
+    id, name, footer,
+    students: [{ id, name }],
+    lastSession: { week, day, sessionDate, sessionTime, topics, tasks, presentStudentIds }
+  }]
+}
+```
+
+Cohort names are unique (ignoring case and extra spaces), and so are student names within a cohort. Only the last generated session is kept for each cohort.
+
+Nothing is sent to a server, so every browser keeps its own copy, and clearing site data erases it. Data saved by older versions of the app is converted to this format the first time the page opens.
 
 ## Changing the password
 
