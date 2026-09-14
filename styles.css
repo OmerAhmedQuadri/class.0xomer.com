@@ -463,8 +463,18 @@ header h1 {
     transition: color 0.15s;
 }
 
-.students-action-btn:hover {
+.students-action-btn:hover:not(:disabled) {
     color: var(--text-primary);
+}
+
+/* Disabled while students are hidden from the output */
+.students-action-btn:disabled {
+    cursor: not-allowed;
+}
+
+/* Add and Select All only make sense while the student list is open */
+.collapsible:not([open]) .students-actions {
+    display: none;
 }
 
 .student-picker {

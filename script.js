@@ -682,6 +682,11 @@ function renderHiddenFields() {
         button.disabled = !currentCohortId;
         button.closest('.form-group').classList.toggle('is-output-hidden', isHidden);
     });
+
+    // While students are left out of the output, their Add and Select All buttons are disabled
+    const studentsHidden = hidden.has('students');
+    addStudentBtn.disabled = studentsHidden;
+    toggleAllStudentsBtn.disabled = studentsHidden;
 }
 
 eyeButtons.forEach(button => {
