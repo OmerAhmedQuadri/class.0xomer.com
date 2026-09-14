@@ -20,8 +20,17 @@ function showLoginError(message) {
     loginBtn.textContent = 'Login';
 }
 
+if (!CAN_HASH) {
+    showLoginError(INSECURE_CONTEXT_MESSAGE);
+}
+
 document.getElementById('loginForm').addEventListener('submit', async function(e) {
     e.preventDefault();
+
+    if (!CAN_HASH) {
+        showLoginError(INSECURE_CONTEXT_MESSAGE);
+        return;
+    }
 
     const username = document.getElementById('username').value.trim();
 

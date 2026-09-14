@@ -19,6 +19,8 @@ const sessionTimeInput = document.getElementById('sessionTime');
 const topicsInput = document.getElementById('topics');
 const tasksInput = document.getElementById('tasks');
 const footerInput = document.getElementById('footer');
+const footerDetails = document.getElementById('footerDetails');
+const footerPreview = document.getElementById('footerPreview');
 const studentPicker = document.getElementById('studentPicker');
 const addStudentBtn = document.getElementById('addStudentBtn');
 const toggleAllStudentsBtn = document.getElementById('toggleAllStudentsBtn');
@@ -246,6 +248,7 @@ function selectCohort(id) {
     footerInput.value = cohort ? cohort.footer : '';
     footerInput.disabled = !cohort;
     autoResize(footerInput);
+    updateFooterPreview();
 
     applySessionValues(sessionValuesFor(cohort));
     resetOutput();
@@ -466,6 +469,20 @@ footerInput.addEventListener('input', function() {
         const cohort = findCohort(data, currentCohortId);
         if (cohort) cohort.footer = footerInput.value;
     });
+    updateFooterPreview();
+});
+
+// One-line summary shown beside the collapsed footer
+function updateFooterPreview() {
+    const lines = footerInput.value.split('\n').map(line => line.trim()).filter(Boolean);
+    footerPreview.textContent = lines.length > 0 ? lines.join(' · ') : 'None';
+}
+
+// A collapsed textarea has no height to measure, so size it when the section opens
+footerDetails.addEventListener('toggle', function() {
+    if (footerDetails.open) {
+        autoResize(footerInput);
+    }
 });
 
 document.getElementById('clearBtn').addEventListener('click', function() {

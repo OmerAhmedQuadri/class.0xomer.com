@@ -4,6 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hash Generator - Daily Progress Update</title>
+    <script>
+        // Relative paths on this page need the URL to end in "/". Some hosts serve /hash without
+        // redirecting to /hash/, which would load the main page's files instead.
+        if (!/(\/|\.html)$/.test(location.pathname)) {
+            document.head.appendChild(Object.assign(document.createElement('base'), { href: location.pathname + '/' }));
+        }
+    </script>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -13,7 +20,8 @@
                 <h1>🔐 Hash Generator</h1>
                 <p class="subtitle">Compute SHA-256 hash with salt</p>
             </div>
-            <form id="hashForm">
+            <!-- method="post" keeps the password out of the URL if the script fails to load -->
+            <form id="hashForm" method="post">
                 <div class="form-group">
                     <label for="password">Password:</label>
                     <input type="text" id="password" name="password" placeholder="Enter password to hash" required autofocus>

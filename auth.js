@@ -3,9 +3,13 @@
 
 // To change the password, compute a new hash on /hash/ (with this salt) and paste it below.
 const SALT = 'secure_salt_key';
-const STORED_PASSWORD_HASH = 'b2af8242cfd88c01dc12b361760ecf9add727fa1ff89f29544626614fce8cab6';
+const STORED_PASSWORD_HASH = 'c36099cfa468b2f6d615e32eaff4e4fadcaca8d2773b0737834c22eb0477aa6f';
 const CORRECT_USERNAME = 'admin';
 const AUTH_STORAGE_KEY = 'dailyProgress.authenticated';
+
+// Browsers only provide crypto.subtle over HTTPS or on localhost, not on e.g. http://192.168.x.x
+const CAN_HASH = Boolean(window.crypto && window.crypto.subtle);
+const INSECURE_CONTEXT_MESSAGE = 'Passwords can only be checked over HTTPS or on localhost. Open this page with https:// or http://localhost.';
 
 /**
  * Hash a password using SHA-256 with salt

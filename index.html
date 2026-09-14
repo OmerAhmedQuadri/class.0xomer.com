@@ -82,11 +82,16 @@
                         <small class="field-hint">Click names to mark present. Unselected students will be listed as absentees.</small>
                     </div>
 
-                    <div class="form-group">
-                        <label for="footer">Footer:</label>
-                        <textarea id="footer" name="footer" rows="2" placeholder="e.g.&#10;Team - Your Institute&#10;https://example.org"></textarea>
+                    <!-- Collapsed by default: the footer rarely changes -->
+                    <details class="form-group footer-details" id="footerDetails">
+                        <summary>
+                            <span class="footer-summary-label" id="footerLabel">Footer</span>
+                            <span class="footer-caret" aria-hidden="true">▾</span>
+                            <span class="footer-preview" id="footerPreview">None</span>
+                        </summary>
+                        <textarea id="footer" name="footer" rows="2" aria-labelledby="footerLabel" placeholder="e.g.&#10;Team - Your Institute&#10;https://example.org"></textarea>
                         <small class="field-hint">Saved for this cohort and added to the end of every update. Leave empty for no footer.</small>
-                    </div>
+                    </details>
 
                     <div class="form-buttons">
                         <button type="submit" class="generate-btn">Generate Update</button>

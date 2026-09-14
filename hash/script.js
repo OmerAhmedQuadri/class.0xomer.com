@@ -12,6 +12,14 @@ const hashOutput = document.getElementById('hashOutput');
 
 saltInput.value = SALT;
 
+if (!CAN_HASH) {
+    hashOutput.textContent = INSECURE_CONTEXT_MESSAGE;
+    hashOutput.classList.add('is-error');
+    document.getElementById('copyHashBtn').hidden = true;
+    resultSection.hidden = false;
+    hashBtn.disabled = true;
+}
+
 document.getElementById('hashForm').addEventListener('submit', async function(e) {
     e.preventDefault();
 
