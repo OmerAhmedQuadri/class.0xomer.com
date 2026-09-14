@@ -76,42 +76,49 @@
                         </div>
                     </div>
 
-                    <div class="form-group">
-                        <div class="label-row">
-                            <label for="topics">Topics Covered (one per line):</label>
+                    <!-- Collapsible sections: script.js remembers which ones are open for the next visit -->
+                    <details class="form-group collapsible" id="topicsDetails" open>
+                        <summary class="label-row">
+                            <span class="collapsible-label" id="topicsLabel">Topics Covered (one per line):</span>
                             <button type="button" class="eye-btn" data-field="topics"></button>
-                        </div>
-                        <textarea id="topics" name="topics" rows="4" placeholder="Enter topics, one per line. They will be formatted as bullet points."></textarea>
-                    </div>
+                            <span class="collapsible-caret" aria-hidden="true">▾</span>
+                            <span class="collapsible-preview" id="topicsPreview">None</span>
+                        </summary>
+                        <textarea id="topics" name="topics" rows="4" aria-labelledby="topicsLabel" placeholder="Enter topics, one per line. They will be formatted as bullet points."></textarea>
+                    </details>
 
-                    <div class="form-group">
-                        <div class="label-row">
-                            <label for="tasks">Tasks & Todos (one per line):</label>
+                    <details class="form-group collapsible" id="tasksDetails" open>
+                        <summary class="label-row">
+                            <span class="collapsible-label" id="tasksLabel">Tasks & Todos (one per line):</span>
                             <button type="button" class="eye-btn" data-field="tasks"></button>
-                        </div>
-                        <textarea id="tasks" name="tasks" rows="4" placeholder="Enter tasks, one per line. They will be formatted as bullet points."></textarea>
-                    </div>
+                            <span class="collapsible-caret" aria-hidden="true">▾</span>
+                            <span class="collapsible-preview" id="tasksPreview">None</span>
+                        </summary>
+                        <textarea id="tasks" name="tasks" rows="4" aria-labelledby="tasksLabel" placeholder="Enter tasks, one per line. They will be formatted as bullet points."></textarea>
+                    </details>
 
-                    <div class="form-group">
-                        <div class="label-row">
-                            <label id="studentsLabel">Students Present:</label>
+                    <details class="form-group collapsible" id="studentsDetails" open>
+                        <summary class="label-row">
+                            <span class="collapsible-label" id="studentsLabel">Students Present:</span>
                             <button type="button" class="eye-btn" data-field="students"></button>
-                            <div class="students-actions">
+                            <span class="collapsible-caret" aria-hidden="true">▾</span>
+                            <span class="collapsible-preview" id="studentsPreview">No students</span>
+                            <span class="students-actions">
                                 <button type="button" class="students-action-btn" id="addStudentBtn">Add</button>
                                 <button type="button" class="students-action-btn" id="toggleAllStudentsBtn">Select All</button>
-                            </div>
-                        </div>
+                            </span>
+                        </summary>
                         <div id="studentPicker" class="student-picker" role="listbox" aria-multiselectable="true" aria-labelledby="studentsLabel" tabindex="0"></div>
                         <small class="field-hint">Click names to mark present. Unselected students will be listed as absentees.</small>
-                    </div>
+                    </details>
 
-                    <!-- Collapsed by default: the footer rarely changes -->
-                    <details class="form-group footer-details" id="footerDetails">
+                    <!-- The footer starts collapsed: it rarely changes -->
+                    <details class="form-group collapsible" id="footerDetails">
                         <summary class="label-row">
-                            <span class="footer-summary-label" id="footerLabel">Footer</span>
+                            <span class="collapsible-label" id="footerLabel">Footer</span>
                             <button type="button" class="eye-btn" data-field="footer"></button>
-                            <span class="footer-caret" aria-hidden="true">▾</span>
-                            <span class="footer-preview" id="footerPreview">None</span>
+                            <span class="collapsible-caret" aria-hidden="true">▾</span>
+                            <span class="collapsible-preview" id="footerPreview">None</span>
                         </summary>
                         <textarea id="footer" name="footer" rows="2" aria-labelledby="footerLabel" placeholder="e.g.&#10;Team - Your Institute&#10;https://example.org"></textarea>
                         <small class="field-hint">Saved for this cohort and added to the end of every update. Leave empty for no footer.</small>

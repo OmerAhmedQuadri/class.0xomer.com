@@ -1,6 +1,7 @@
 const DATA_STORAGE_KEY = 'dailyProgress.data';
 const DATA_VERSION = 2;
 const THEME_STORAGE_KEY = 'theme';
+const OPEN_SECTIONS_STORAGE_KEY = 'dailyProgress.openSections';
 
 const DEFAULT_SESSION_TIME = '1:30 PM - 4:30 PM';
 // Form fields that can be hidden from the output, in form order
@@ -21,8 +22,11 @@ const sessionTimeInput = document.getElementById('sessionTime');
 const topicsInput = document.getElementById('topics');
 const tasksInput = document.getElementById('tasks');
 const footerInput = document.getElementById('footer');
-const footerDetails = document.getElementById('footerDetails');
+const topicsPreview = document.getElementById('topicsPreview');
+const tasksPreview = document.getElementById('tasksPreview');
+const studentsPreview = document.getElementById('studentsPreview');
 const footerPreview = document.getElementById('footerPreview');
+const collapsibles = document.querySelectorAll('details.collapsible');
 const studentPicker = document.getElementById('studentPicker');
 const addStudentBtn = document.getElementById('addStudentBtn');
 const toggleAllStudentsBtn = document.getElementById('toggleAllStudentsBtn');
@@ -254,7 +258,6 @@ function selectCohort(id) {
     footerInput.value = cohort ? cohort.footer : '';
     footerInput.disabled = !cohort;
     autoResize(footerInput);
-    updateFooterPreview();
 
     applySessionValues(sessionValuesFor(cohort));
     resetOutput();
@@ -367,6 +370,7 @@ function updateStudentSelection() {
         anyPresent = anyPresent || isPresent;
     }
     toggleAllStudentsBtn.textContent = anyPresent ? 'Clear' : 'Select All';
+    updatePreviews();
 }
 
 function deleteStudent(id) {
@@ -418,7 +422,10 @@ function autoResize(textarea) {
 }
 
 [topicsInput, tasksInput, footerInput].forEach(textarea => {
-    textarea.addEventListener('input', () => autoResize(textarea));
+    textarea.addEventListener('input', function() {
+        autoResize(textarea);
+        updatePreviews();
+    });
 });
 
 // Local date as YYYY-MM-DD (toISOString() gives the UTC date, which can be yesterday)
@@ -482,20 +489,52 @@ footerInput.addEventListener('input', function() {
         const cohort = findCohort(data, currentCohortId);
         if (cohort) cohort.footer = footerInput.value;
     });
-    updateFooterPreview();
 });
 
-// One-line summary shown beside the collapsed footer
-function updateFooterPreview() {
-    const lines = footerInput.value.split('\n').map(line => line.trim()).filter(Boolean);
-    footerPreview.textContent = lines.length > 0 ? lines.join(' · ') : 'None';
+// ---- Collapsible sections ----
+
+// One-line summaries shown beside collapsed sections
+function updatePreviews() {
+    const summarize = (items, emptyText) => (items.length > 0 ? items.join(' · ') : emptyText);
+    topicsPreview.textContent = summarize(toListItems(topicsInput.value), 'None');
+    tasksPreview.textContent = summarize(toListItems(tasksInput.value), 'None');
+    footerPreview.textContent = summarize(footerInput.value.split('\n').map(line => line.trim()).filter(Boolean), 'None');
+
+    const total = studentPicker.children.length;
+    const present = studentPicker.querySelectorAll('.is-selected').length;
+    studentsPreview.textContent = total > 0 ? `${present} of ${total} present` : 'No students';
 }
 
-// A collapsed textarea has no height to measure, so size it when the section opens
-footerDetails.addEventListener('toggle', function() {
-    if (footerDetails.open) {
-        autoResize(footerInput);
+// Which sections are open is a per-browser preference, like the theme, kept for the next visit
+function readOpenSections() {
+    const saved = readJSON(OPEN_SECTIONS_STORAGE_KEY);
+    return isObject(saved) ? saved : {};
+}
+
+collapsibles.forEach(section => {
+    const savedOpen = readOpenSections()[section.id];
+    if (typeof savedOpen === 'boolean') {
+        section.open = savedOpen;
     }
+
+    section.addEventListener('toggle', function() {
+        // A collapsed textarea has no height to measure, so size it when the section opens
+        if (section.open) {
+            section.querySelectorAll('textarea').forEach(autoResize);
+        }
+        const openSections = readOpenSections();
+        openSections[section.id] = section.open;
+        localStorage.setItem(OPEN_SECTIONS_STORAGE_KEY, JSON.stringify(openSections));
+    });
+
+    // Buttons in the header row (eye, Add, Select All) shouldn't open or close the section.
+    // Check the event path rather than e.target.closest(): the eye swaps its icon when clicked,
+    // which detaches the clicked <svg> before the event reaches the summary.
+    section.querySelector('summary').addEventListener('click', function(e) {
+        if (e.composedPath().some(node => node instanceof HTMLButtonElement)) {
+            e.preventDefault();
+        }
+    });
 });
 
 document.getElementById('clearBtn').addEventListener('click', function() {
@@ -646,9 +685,7 @@ function renderHiddenFields() {
 }
 
 eyeButtons.forEach(button => {
-    button.addEventListener('click', function(e) {
-        // The footer's button sits inside <summary>, so don't let the click open or close that section
-        e.preventDefault();
+    button.addEventListener('click', function() {
         const field = button.dataset.field;
         updateData(data => {
             const cohort = findCohort(data, currentCohortId);

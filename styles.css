@@ -538,8 +538,8 @@ header h1 {
     box-shadow: 0 0 0 2px rgba(143, 17, 235, 0.2), var(--input-shadow);
 }
 
-/* Footer section, collapsed by default */
-.footer-details summary {
+/* Collapsible sections (topics, tasks, students, footer) with a one-line preview when closed */
+.collapsible > summary {
     display: flex;
     align-items: center;
     gap: 6px;
@@ -548,28 +548,28 @@ header h1 {
     user-select: none;
 }
 
-.footer-details summary::-webkit-details-marker {
+.collapsible > summary::-webkit-details-marker {
     display: none;
 }
 
-.footer-details:not([open]) > summary {
+.collapsible:not([open]) > summary {
     margin-bottom: 0;
 }
 
-.footer-details summary:focus-visible {
+.collapsible > summary:focus-visible {
     outline: 2px solid var(--border-focus);
     outline-offset: 2px;
     border-radius: 4px;
 }
 
-.footer-summary-label {
+.collapsible-label {
     flex-shrink: 0;
     font-weight: 600;
     font-size: 14px;
     color: var(--text-label);
 }
 
-.footer-caret {
+.collapsible-caret {
     display: inline-block;
     flex-shrink: 0;
     color: var(--text-secondary);
@@ -578,11 +578,11 @@ header h1 {
     transition: transform 0.15s;
 }
 
-.footer-details[open] .footer-caret {
+.collapsible[open] .collapsible-caret {
     transform: none;
 }
 
-.footer-preview {
+.collapsible-preview {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -591,7 +591,7 @@ header h1 {
     color: var(--text-secondary);
 }
 
-.footer-details[open] .footer-preview {
+.collapsible[open] .collapsible-preview {
     display: none;
 }
 
