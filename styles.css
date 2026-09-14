@@ -400,6 +400,72 @@ header h1 {
     background: rgba(143, 17, 235, 0.2);
 }
 
+.cohort-dropdown-item-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Delete button, shown while hovering the row or using the keyboard (the drag handle is always visible) */
+.cohort-dropdown-item-actions {
+    opacity: 0;
+    transition: opacity 0.12s;
+}
+
+.cohort-dropdown-item:hover .cohort-dropdown-item-actions,
+.cohort-dropdown-item:has(:focus-visible) .cohort-dropdown-item-actions {
+    opacity: 1;
+}
+
+/* Touch screens can't hover, so keep it visible there */
+@media (hover: none) {
+    .cohort-dropdown-item-actions {
+        opacity: 1;
+    }
+}
+
+.cohort-dropdown-item-handle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 16px;
+    height: 20px;
+    padding: 0;
+    border: none;
+    border-radius: 3px;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: grab;
+    /* A touch drag on the handle reorders instead of scrolling */
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.cohort-dropdown-item-handle svg {
+    width: 8px;
+    height: 14px;
+    fill: currentColor;
+}
+
+.cohort-dropdown-item-handle:hover {
+    color: var(--text-primary);
+}
+
+.cohort-dropdown-item-handle:focus-visible {
+    outline: 2px solid var(--border-focus);
+    outline-offset: 1px;
+}
+
+.cohort-dropdown-item-actions {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+
 .cohort-dropdown-item-delete {
     border: none;
     background: transparent;
@@ -409,16 +475,34 @@ header h1 {
     line-height: 1;
     padding: 0.1rem 0.25rem;
     border-radius: 3px;
-    opacity: 0;
-    transition: opacity 0.12s, color 0.12s;
-}
-
-.cohort-dropdown-item:hover .cohort-dropdown-item-delete {
-    opacity: 1;
+    transition: color 0.12s;
 }
 
 .cohort-dropdown-item-delete:hover {
     color: var(--danger-color);
+}
+
+/* While a cohort is being dragged */
+.cohort-dropdown-menu.is-reordering {
+    cursor: grabbing;
+    user-select: none;
+}
+
+.cohort-dropdown-menu.is-reordering .cohort-dropdown-item-handle {
+    cursor: grabbing;
+}
+
+.cohort-dropdown-item.is-dragging {
+    background: rgba(143, 17, 235, 0.3);
+    box-shadow: var(--input-shadow);
+}
+
+.cohort-dropdown-menu.is-reordering .cohort-dropdown-item:not(.is-dragging):not(.is-active):hover {
+    background: transparent;
+}
+
+.cohort-dropdown-menu.is-reordering .cohort-dropdown-item .cohort-dropdown-item-actions {
+    opacity: 0;
 }
 
 .cohort-dropdown-add {
@@ -548,7 +632,7 @@ header h1 {
     box-shadow: 0 0 0 2px rgba(143, 17, 235, 0.2), var(--input-shadow);
 }
 
-/* Collapsible sections (topics, tasks, students, footer) with a one-line preview when closed */
+/* Collapsible sections (topics, tasks, resources, note, students, footer) with a one-line preview when closed */
 .collapsible > summary {
     display: flex;
     align-items: center;

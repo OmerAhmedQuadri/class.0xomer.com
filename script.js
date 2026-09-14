@@ -5,7 +5,7 @@ const OPEN_SECTIONS_STORAGE_KEY = 'dailyProgress.openSections';
 
 const DEFAULT_SESSION_TIME = '1:30 PM - 4:30 PM';
 // Form fields that can be hidden from the output, in form order
-const OUTPUT_FIELDS = ['cohort', 'week', 'day', 'sessionDate', 'sessionTime', 'topics', 'tasks', 'students', 'footer'];
+const OUTPUT_FIELDS = ['cohort', 'week', 'day', 'sessionDate', 'sessionTime', 'topics', 'tasks', 'resources', 'note', 'students', 'footer'];
 const OUTPUT_PLACEHOLDER = 'Fill in the form and click "Generate Update" to see the output here.';
 // Bullets or numbering pasted into topics/tasks; the output adds its own
 const LIST_MARKER = /^(?:[•*-]|\d+[.)])\s+/;
@@ -21,9 +21,13 @@ const sessionDateInput = document.getElementById('sessionDate');
 const sessionTimeInput = document.getElementById('sessionTime');
 const topicsInput = document.getElementById('topics');
 const tasksInput = document.getElementById('tasks');
+const resourcesInput = document.getElementById('resources');
+const noteInput = document.getElementById('note');
 const footerInput = document.getElementById('footer');
 const topicsPreview = document.getElementById('topicsPreview');
 const tasksPreview = document.getElementById('tasksPreview');
+const resourcesPreview = document.getElementById('resourcesPreview');
+const notePreview = document.getElementById('notePreview');
 const studentsPreview = document.getElementById('studentsPreview');
 const footerPreview = document.getElementById('footerPreview');
 const collapsibles = document.querySelectorAll('details.collapsible');
@@ -49,7 +53,7 @@ let generatedUpdate = null; // { text, markdown } for the copy buttons
 //     id, name, footer,
 //     hiddenFields: ['week', ...], (fields left out of the output)
 //     students: [{ id, name }],
-//     lastSession: { week, day, sessionDate, sessionTime, topics, tasks, presentStudentIds } or null
+//     lastSession: { week, day, sessionDate, sessionTime, topics, tasks, resources, note, presentStudentIds } or null
 //   }]
 // }
 
@@ -201,8 +205,11 @@ function setCohortDropdownOpen(isOpen) {
     cohortDropdownBtn.setAttribute('aria-expanded', isOpen);
 }
 
+const GRIP_ICON = '<svg viewBox="0 0 10 16" aria-hidden="true"><circle cx="3" cy="3" r="1.5"/><circle cx="7" cy="3" r="1.5"/><circle cx="3" cy="8" r="1.5"/><circle cx="7" cy="8" r="1.5"/><circle cx="3" cy="13" r="1.5"/><circle cx="7" cy="13" r="1.5"/></svg>';
+
 function renderCohorts(data) {
     const current = findCohort(data, currentCohortId);
+    const scrollTop = cohortDropdownMenu.scrollTop;
     cohortDropdownLabel.textContent = current ? current.name : 'Add cohort';
     cohortDropdownMenu.innerHTML = '';
 
@@ -211,12 +218,36 @@ function renderCohorts(data) {
         const row = document.createElement('div');
         row.className = 'cohort-dropdown-item';
         row.classList.toggle('is-active', isActive);
+        row.dataset.id = cohort.id;
         row.setAttribute('role', 'option');
         row.setAttribute('aria-selected', isActive);
 
+        // Drag handle: drag to reorder, or focus it and use the up/down arrow keys
+        const handle = document.createElement('button');
+        handle.type = 'button';
+        handle.className = 'cohort-dropdown-item-handle';
+        handle.innerHTML = GRIP_ICON;
+        handle.title = 'Drag to reorder';
+        handle.setAttribute('aria-label', `Reorder ${cohort.name} (use the up and down arrow keys)`);
+        handle.addEventListener('pointerdown', e => startCohortDrag(e, row, handle));
+        handle.addEventListener('click', e => e.stopPropagation());
+        handle.addEventListener('keydown', function(e) {
+            const offset = { ArrowUp: -1, ArrowDown: 1 }[e.key];
+            if (offset) {
+                e.preventDefault();
+                moveCohort(cohort.id, offset);
+            }
+        });
+        row.appendChild(handle);
+
         const label = document.createElement('span');
+        label.className = 'cohort-dropdown-item-name';
         label.textContent = cohort.name;
         row.appendChild(label);
+
+        const actions = document.createElement('div');
+        actions.className = 'cohort-dropdown-item-actions';
+        row.appendChild(actions);
 
         const deleteBtn = document.createElement('button');
         deleteBtn.type = 'button';
@@ -228,7 +259,7 @@ function renderCohorts(data) {
             e.stopPropagation();
             deleteCohort(cohort.id);
         });
-        row.appendChild(deleteBtn);
+        actions.appendChild(deleteBtn);
 
         row.addEventListener('click', function() {
             selectCohort(cohort.id);
@@ -245,6 +276,9 @@ function renderCohorts(data) {
     addBtn.addEventListener('click', addCohort);
     addWrap.appendChild(addBtn);
     cohortDropdownMenu.appendChild(addWrap);
+
+    // Rebuilding the list resets its scroll position (e.g. after dropping a dragged cohort), so restore it
+    cohortDropdownMenu.scrollTop = scrollTop;
 }
 
 // Switch the form to a cohort ('' when there are none) and load its last session
@@ -304,6 +338,93 @@ function deleteCohort(id) {
     } else {
         selectCohort(data.cohorts[0]?.id || '');
     }
+}
+
+// ---- Reordering cohorts (the first cohort is the one opened on page load) ----
+
+// Up/down arrow keys on a focused drag handle move its cohort one place
+function moveCohort(id, offset) {
+    const data = updateData(d => {
+        const from = d.cohorts.findIndex(c => c.id === id);
+        const to = from + offset;
+        if (from < 0 || to < 0 || to >= d.cohorts.length) return;
+        d.cohorts.splice(to, 0, ...d.cohorts.splice(from, 1));
+    });
+    renderCohorts(data);
+
+    // The list was rebuilt, so put focus back on the moved cohort's handle for repeated key presses
+    [...cohortDropdownMenu.children].find(item => item.dataset.id === id)?.querySelector('.cohort-dropdown-item-handle')?.focus();
+}
+
+function cohortRowIds() {
+    return [...cohortDropdownMenu.querySelectorAll('.cohort-dropdown-item')].map(item => item.dataset.id);
+}
+
+function middleOf(element) {
+    const box = element.getBoundingClientRect();
+    return box.top + box.height / 2;
+}
+
+// Drag a cohort row by its handle. Pointer events cover mouse, touch and pen.
+function startCohortDrag(e, row, handle) {
+    if (!e.isPrimary || e.button !== 0) return;
+    e.preventDefault();
+    // Capture keeps the pointer events (and the click that follows) on the handle wherever the pointer goes
+    handle.setPointerCapture(e.pointerId);
+
+    const startOrder = cohortRowIds();
+    row.classList.add('is-dragging');
+    cohortDropdownMenu.classList.add('is-reordering');
+
+    function onMove(moveEvent) {
+        const y = moveEvent.clientY;
+        // Move the neighbours past the dragged row instead of moving the row itself,
+        // which would detach the handle and drop the pointer capture
+        let previous = row.previousElementSibling;
+        while (previous && y < middleOf(previous)) {
+            row.after(previous);
+            previous = row.previousElementSibling;
+        }
+        let next = row.nextElementSibling;
+        while (next && next.classList.contains('cohort-dropdown-item') && y > middleOf(next)) {
+            row.before(next);
+            next = row.nextElementSibling;
+        }
+
+        // Scroll a long list while dragging near its top or bottom edge
+        const menuBox = cohortDropdownMenu.getBoundingClientRect();
+        if (y < menuBox.top + 24) {
+            cohortDropdownMenu.scrollTop -= 10;
+        } else if (y > menuBox.bottom - 24) {
+            cohortDropdownMenu.scrollTop += 10;
+        }
+    }
+
+    function onEnd(endEvent) {
+        handle.removeEventListener('pointermove', onMove);
+        handle.removeEventListener('pointerup', onEnd);
+        handle.removeEventListener('pointercancel', onEnd);
+        handle.removeEventListener('lostpointercapture', onEnd);
+        row.classList.remove('is-dragging');
+        cohortDropdownMenu.classList.remove('is-reordering');
+
+        const newOrder = cohortRowIds();
+        if (newOrder.every((id, index) => id === startOrder[index])) return;
+        if (endEvent.type === 'pointercancel') {
+            renderCohorts(loadData()); // put the rows back
+            return;
+        }
+        renderCohorts(updateData(data => {
+            const position = new Map(newOrder.map((id, index) => [id, index]));
+            // Cohorts added in another tab in the meantime go to the end
+            data.cohorts.sort((a, b) => (position.get(a.id) ?? newOrder.length) - (position.get(b.id) ?? newOrder.length));
+        }));
+    }
+
+    handle.addEventListener('pointermove', onMove);
+    handle.addEventListener('pointerup', onEnd);
+    handle.addEventListener('pointercancel', onEnd);
+    handle.addEventListener('lostpointercapture', onEnd);
 }
 
 cohortDropdownBtn.addEventListener('click', function() {
@@ -421,7 +542,7 @@ function autoResize(textarea) {
     textarea.style.height = textarea.scrollHeight + textarea.offsetHeight - textarea.clientHeight + 'px';
 }
 
-[topicsInput, tasksInput, footerInput].forEach(textarea => {
+[topicsInput, tasksInput, resourcesInput, noteInput, footerInput].forEach(textarea => {
     textarea.addEventListener('input', function() {
         autoResize(textarea);
         updatePreviews();
@@ -443,6 +564,8 @@ function defaultSessionValues() {
         sessionTime: DEFAULT_SESSION_TIME,
         topics: '',
         tasks: '',
+        resources: '',
+        note: '',
         presentStudentIds: []
     };
 }
@@ -466,6 +589,8 @@ function readSessionValues() {
         sessionTime: sessionTimeInput.value,
         topics: topicsInput.value,
         tasks: tasksInput.value,
+        resources: resourcesInput.value,
+        note: noteInput.value,
         presentStudentIds: currentStudents().map(student => student.id).filter(id => presentStudentIds.has(id))
     };
 }
@@ -477,8 +602,9 @@ function applySessionValues(values) {
     sessionTimeInput.value = values.sessionTime;
     topicsInput.value = values.topics;
     tasksInput.value = values.tasks;
-    autoResize(topicsInput);
-    autoResize(tasksInput);
+    resourcesInput.value = values.resources;
+    noteInput.value = values.note;
+    [topicsInput, tasksInput, resourcesInput, noteInput].forEach(autoResize);
     presentStudentIds = new Set(values.presentStudentIds);
     renderStudents();
 }
@@ -498,6 +624,8 @@ function updatePreviews() {
     const summarize = (items, emptyText) => (items.length > 0 ? items.join(' · ') : emptyText);
     topicsPreview.textContent = summarize(toListItems(topicsInput.value), 'None');
     tasksPreview.textContent = summarize(toListItems(tasksInput.value), 'None');
+    resourcesPreview.textContent = summarize(toListItems(resourcesInput.value), 'None');
+    notePreview.textContent = summarize(toListItems(noteInput.value), 'None');
     footerPreview.textContent = summarize(footerInput.value.split('\n').map(line => line.trim()).filter(Boolean), 'None');
 
     const total = studentPicker.children.length;
@@ -578,6 +706,8 @@ function formatUpdate(update, hidden, markdown) {
     const sections = [
         ['topics', 'Topics Covered:', update.topics],
         ['tasks', 'Tasks & Todos:', update.tasks],
+        ['resources', 'Resources:', update.resources],
+        ['note', 'Note:', update.note],
         ['students', 'Absentees:', update.absentees]
     ].filter(([key, , items]) => show(key) && items.length > 0);
     sections.forEach(([, heading, items]) => {
@@ -620,6 +750,8 @@ progressForm.addEventListener('submit', function(e) {
         sessionTime: values.sessionTime,
         topics: toListItems(values.topics),
         tasks: toListItems(values.tasks),
+        resources: toListItems(values.resources),
+        note: toListItems(values.note),
         absentees: cohort.students.filter(student => !presentStudentIds.has(student.id)).map(student => student.name),
         footer: footerInput.value
     };
