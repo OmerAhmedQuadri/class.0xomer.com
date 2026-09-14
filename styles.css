@@ -190,6 +190,102 @@ header h1 {
     color: var(--text-secondary);
 }
 
+/* A label with its button for hiding the field from the output */
+.label-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+
+.form-group .label-row label {
+    margin-bottom: 0;
+}
+
+/* The eye only shows while hovering its form item, or when focused from the keyboard */
+.eye-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s, color 0.15s, background 0.15s;
+}
+
+.eye-btn svg {
+    width: 14px;
+    height: 14px;
+}
+
+.eye-btn:hover,
+.eye-btn:focus-visible {
+    color: var(--text-primary);
+    background: rgba(143, 17, 235, 0.12);
+}
+
+.eye-btn:focus-visible {
+    outline: 2px solid var(--border-focus);
+    outline-offset: 1px;
+}
+
+.form-group:hover .eye-btn {
+    opacity: 0.6;
+}
+
+/* Fields hidden from the output stay editable but look faded */
+.is-output-hidden > :not(.label-row),
+.is-output-hidden > .label-row > :not(.eye-btn) {
+    opacity: 0.45;
+}
+
+.is-output-hidden .eye-btn {
+    color: var(--accent-color);
+}
+
+.form-group.is-output-hidden:hover .eye-btn,
+.form-group:hover .eye-btn:hover,
+.form-group .eye-btn:focus-visible {
+    opacity: 1;
+}
+
+.form-group:hover .eye-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+    background: transparent;
+}
+
+/* Touch screens can't hover, so keep the eyes visible there */
+@media (hover: none) {
+    .eye-btn {
+        opacity: 0.6;
+    }
+
+    .is-output-hidden .eye-btn {
+        opacity: 1;
+    }
+
+    .eye-btn:disabled {
+        opacity: 0.3;
+    }
+}
+
+/* Fade the cohort button, not its dropdown menu */
+.is-output-hidden > .cohort-controls {
+    opacity: 1;
+}
+
+.is-output-hidden .cohort-dropdown-btn {
+    opacity: 0.45;
+}
+
 /* Number input spin buttons - subtle styling */
 .form-group input[type="number"]::-webkit-inner-spin-button,
 .form-group input[type="number"]::-webkit-outer-spin-button {
@@ -349,22 +445,11 @@ header h1 {
 }
 
 /* Student attendance picker */
-.students-label-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.5rem;
-    margin-bottom: 8px;
-}
-
-.students-label-row label {
-    margin-bottom: 0;
-}
-
 .students-actions {
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
+    margin-left: auto;
 }
 
 .students-action-btn {
@@ -467,8 +552,8 @@ header h1 {
     display: none;
 }
 
-.footer-details[open] summary {
-    margin-bottom: 8px;
+.footer-details:not([open]) > summary {
+    margin-bottom: 0;
 }
 
 .footer-details summary:focus-visible {

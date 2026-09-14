@@ -27,9 +27,13 @@
                 </header>
                 <form id="progressForm">
                     <h2>Input Details</h2>
+                    <!-- Each .eye-btn hides its field from the generated output (saved per cohort); script.js adds the icons -->
                     <div class="form-row">
                         <div class="form-group">
-                            <label id="cohortLabel">Cohort:</label>
+                            <div class="label-row">
+                                <label id="cohortLabel">Cohort:</label>
+                                <button type="button" class="eye-btn" data-field="cohort"></button>
+                            </div>
                             <div class="cohort-controls" id="cohortControls">
                                 <button type="button" class="cohort-dropdown-btn" id="cohortDropdownBtn" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="cohortLabel cohortDropdownLabel">
                                     <span id="cohortDropdownLabel">Select cohort</span>
@@ -39,40 +43,59 @@
                             </div>
                         </div>
                         <div class="form-group">
-                            <label for="week">Week:</label>
+                            <div class="label-row">
+                                <label for="week">Week:</label>
+                                <button type="button" class="eye-btn" data-field="week"></button>
+                            </div>
                             <input type="number" id="week" name="week" min="0" value="0" required>
                         </div>
 
                         <div class="form-group">
-                            <label for="day">Day:</label>
+                            <div class="label-row">
+                                <label for="day">Day:</label>
+                                <button type="button" class="eye-btn" data-field="day"></button>
+                            </div>
                             <input type="number" id="day" name="day" min="1" value="1" required>
                         </div>
                     </div>
 
                     <div class="form-row">
                         <div class="form-group">
-                            <label for="sessionDate">Session Date:</label>
+                            <div class="label-row">
+                                <label for="sessionDate">Session Date:</label>
+                                <button type="button" class="eye-btn" data-field="sessionDate"></button>
+                            </div>
                             <input type="date" id="sessionDate" name="sessionDate" required>
                         </div>
                         <div class="form-group">
-                            <label for="sessionTime">Session Time:</label>
+                            <div class="label-row">
+                                <label for="sessionTime">Session Time:</label>
+                                <button type="button" class="eye-btn" data-field="sessionTime"></button>
+                            </div>
                             <input type="text" id="sessionTime" name="sessionTime" placeholder="e.g., 1:30 PM - 4:30 PM" value="1:30 PM - 4:30 PM" required>
                         </div>
                     </div>
 
                     <div class="form-group">
-                        <label for="topics">Topics Covered (one per line):</label>
+                        <div class="label-row">
+                            <label for="topics">Topics Covered (one per line):</label>
+                            <button type="button" class="eye-btn" data-field="topics"></button>
+                        </div>
                         <textarea id="topics" name="topics" rows="4" placeholder="Enter topics, one per line. They will be formatted as bullet points."></textarea>
                     </div>
 
                     <div class="form-group">
-                        <label for="tasks">Tasks & Todos (one per line):</label>
+                        <div class="label-row">
+                            <label for="tasks">Tasks & Todos (one per line):</label>
+                            <button type="button" class="eye-btn" data-field="tasks"></button>
+                        </div>
                         <textarea id="tasks" name="tasks" rows="4" placeholder="Enter tasks, one per line. They will be formatted as bullet points."></textarea>
                     </div>
 
                     <div class="form-group">
-                        <div class="students-label-row">
+                        <div class="label-row">
                             <label id="studentsLabel">Students Present:</label>
+                            <button type="button" class="eye-btn" data-field="students"></button>
                             <div class="students-actions">
                                 <button type="button" class="students-action-btn" id="addStudentBtn">Add</button>
                                 <button type="button" class="students-action-btn" id="toggleAllStudentsBtn">Select All</button>
@@ -84,8 +107,9 @@
 
                     <!-- Collapsed by default: the footer rarely changes -->
                     <details class="form-group footer-details" id="footerDetails">
-                        <summary>
+                        <summary class="label-row">
                             <span class="footer-summary-label" id="footerLabel">Footer</span>
+                            <button type="button" class="eye-btn" data-field="footer"></button>
                             <span class="footer-caret" aria-hidden="true">▾</span>
                             <span class="footer-preview" id="footerPreview">None</span>
                         </summary>

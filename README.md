@@ -29,13 +29,14 @@ Everything is saved in the browser's `localStorage` under one key, `dailyProgres
   version: 2,
   cohorts: [{
     id, name, footer,
+    hiddenFields: ['week', ...],  // fields left out of the output
     students: [{ id, name }],
     lastSession: { week, day, sessionDate, sessionTime, topics, tasks, presentStudentIds }
   }]
 }
 ```
 
-Cohort names are unique (ignoring case and extra spaces), and so are student names within a cohort. Only the last generated session is kept for each cohort.
+Cohort names are unique (ignoring case and extra spaces), and so are student names within a cohort. Only the last generated session is kept for each cohort. The eye button next to each field label leaves that field out of the output (the form still keeps its value), and that choice is saved per cohort too.
 
 Nothing is sent to a server, so every browser keeps its own copy, and clearing site data erases it. Data saved by older versions of the app is converted to this format the first time the page opens.
 

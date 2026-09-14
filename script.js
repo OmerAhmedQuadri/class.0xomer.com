@@ -3,6 +3,8 @@ const DATA_VERSION = 2;
 const THEME_STORAGE_KEY = 'theme';
 
 const DEFAULT_SESSION_TIME = '1:30 PM - 4:30 PM';
+// Form fields that can be hidden from the output, in form order
+const OUTPUT_FIELDS = ['cohort', 'week', 'day', 'sessionDate', 'sessionTime', 'topics', 'tasks', 'students', 'footer'];
 const OUTPUT_PLACEHOLDER = 'Fill in the form and click "Generate Update" to see the output here.';
 // Bullets or numbering pasted into topics/tasks; the output adds its own
 const LIST_MARKER = /^(?:[•*-]|\d+[.)])\s+/;
@@ -28,6 +30,7 @@ const outputContent = document.getElementById('outputContent');
 const copyBtn = document.getElementById('copyBtn');
 const copyMarkdownBtn = document.getElementById('copyMarkdownBtn');
 const themeToggle = document.getElementById('themeToggle');
+const eyeButtons = document.querySelectorAll('.eye-btn');
 
 let currentCohortId = '';
 let presentStudentIds = new Set();
@@ -40,6 +43,7 @@ let generatedUpdate = null; // { text, markdown } for the copy buttons
 //   version: 2,
 //   cohorts: [{
 //     id, name, footer,
+//     hiddenFields: ['week', ...], (fields left out of the output)
 //     students: [{ id, name }],
 //     lastSession: { week, day, sessionDate, sessionTime, topics, tasks, presentStudentIds } or null
 //   }]
@@ -89,6 +93,7 @@ function normalizeData(raw) {
             id: String(cohort.id),
             name,
             footer: typeof cohort.footer === 'string' ? cohort.footer : '',
+            hiddenFields: Array.isArray(cohort.hiddenFields) ? OUTPUT_FIELDS.filter(field => cohort.hiddenFields.includes(field)) : [],
             students,
             lastSession: isObject(cohort.lastSession) ? cohort.lastSession : null
         });
@@ -244,6 +249,7 @@ function selectCohort(id) {
     const cohort = findCohort(data, id);
     currentCohortId = cohort ? cohort.id : '';
     renderCohorts(data);
+    renderHiddenFields();
 
     footerInput.value = cohort ? cohort.footer : '';
     footerInput.disabled = !cohort;
@@ -265,9 +271,16 @@ function addCohort() {
     } else {
         const id = createId();
         updateData(data => {
-            // Start from the current cohort's footer, since new cohorts usually belong to the same institute
-            const footer = findCohort(data, currentCohortId)?.footer || '';
-            data.cohorts.push({ id, name, footer, students: [], lastSession: null });
+            // Start from the current cohort's footer and hidden fields, since new cohorts usually belong to the same institute
+            const current = findCohort(data, currentCohortId);
+            data.cohorts.push({
+                id,
+                name,
+                footer: current ? current.footer : '',
+                hiddenFields: current ? [...current.hiddenFields] : [],
+                students: [],
+                lastSession: null
+            });
         });
         selectCohort(id);
     }
@@ -506,44 +519,40 @@ function formatSessionDate(value) {
     return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 }
 
-function formatUpdate(update, markdown) {
+// Builds the update as blocks of lines separated by blank lines, leaving out hidden fields
+function formatUpdate(update, hidden, markdown) {
+    const show = key => !hidden.has(key);
     const field = (label, value) => (markdown ? `**${label}:** ${value}` : `${label}: ${value}`);
-    const lines = [
-        `${markdown ? '## ' : ''}${update.cohort} - Daily Progress`,
-        '',
-        field('Week', update.week),
-        field('Session', update.day),
-        field('Attendance Count', update.attendance),
-        field('Session Date', update.sessionDate),
-        field('Session Time', update.sessionTime),
-        ''
+    const title = `${show('cohort') ? `${update.cohort} - ` : ''}Daily Progress`;
+
+    const blocks = [
+        [`${markdown ? '## ' : ''}${title}`],
+        [
+            show('week') && field('Week', update.week),
+            show('day') && field('Session', update.day),
+            show('students') && field('Attendance Count', update.attendance),
+            show('sessionDate') && field('Session Date', update.sessionDate),
+            show('sessionTime') && field('Session Time', update.sessionTime)
+        ].filter(Boolean)
     ];
 
     const sections = [
-        ['Topics Covered:', update.topics],
-        ['Tasks & Todos:', update.tasks],
-        ['Absentees:', update.absentees]
-    ];
-    let hasContent = false;
-    sections.forEach(([title, items]) => {
-        if (items.length === 0) return;
-        lines.push(`${markdown ? '### ' : ''}${title}`);
-        items.forEach(item => lines.push(`${markdown ? '-' : '•'} ${item}`));
-        lines.push('');
-        hasContent = true;
+        ['topics', 'Topics Covered:', update.topics],
+        ['tasks', 'Tasks & Todos:', update.tasks],
+        ['students', 'Absentees:', update.absentees]
+    ].filter(([key, , items]) => show(key) && items.length > 0);
+    sections.forEach(([, heading, items]) => {
+        blocks.push([`${markdown ? '### ' : ''}${heading}`, ...items.map(item => `${markdown ? '-' : '•'} ${item}`)]);
     });
 
     // The footer is used as written, in both formats
-    const footer = update.footer.trim();
+    const footer = show('footer') ? update.footer.trim() : '';
     if (footer) {
-        if (hasContent) {
-            lines.push(markdown ? '---' : '—');
-        }
-        lines.push(...footer.split('\n').map(line => line.trimEnd()));
+        const footerLines = footer.split('\n').map(line => line.trimEnd());
+        blocks.push(sections.length > 0 ? [markdown ? '---' : '—', ...footerLines] : footerLines);
     }
 
-    // Without a footer the last section leaves a blank line; end with exactly one newline
-    return lines.join('\n').replace(/\n*$/, '\n');
+    return blocks.filter(block => block.length > 0).map(block => block.join('\n')).join('\n\n') + '\n';
 }
 
 function resetOutput() {
@@ -576,9 +585,11 @@ progressForm.addEventListener('submit', function(e) {
         footer: footerInput.value
     };
 
+    // Hidden fields are applied here, so toggling an eye later waits for the next Generate
+    const hidden = currentHiddenFields();
     generatedUpdate = {
-        text: formatUpdate(update, false),
-        markdown: formatUpdate(update, true)
+        text: formatUpdate(update, hidden, false),
+        markdown: formatUpdate(update, hidden, true)
     };
     outputContent.textContent = generatedUpdate.text;
     copyBtn.hidden = false;
@@ -609,6 +620,50 @@ function copyToClipboard(button, text) {
 
 copyBtn.addEventListener('click', () => copyToClipboard(copyBtn, generatedUpdate.text));
 copyMarkdownBtn.addEventListener('click', () => copyToClipboard(copyMarkdownBtn, generatedUpdate.markdown));
+
+// ---- Hiding fields from the output ----
+
+const EYE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+const EYE_OFF_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+
+function currentHiddenFields() {
+    return new Set(findCohort(loadData(), currentCohortId)?.hiddenFields || []);
+}
+
+// Hidden fields stay editable in the form but look faded
+function renderHiddenFields() {
+    const hidden = currentHiddenFields();
+    eyeButtons.forEach(button => {
+        const isHidden = hidden.has(button.dataset.field);
+        const name = button.closest('.label-row').firstElementChild.textContent.replace(/\s*[:(].*$/, '');
+        button.innerHTML = isHidden ? EYE_OFF_ICON : EYE_ICON;
+        button.title = isHidden ? `Show ${name} in the output` : `Hide ${name} from the output`;
+        button.setAttribute('aria-label', `Hide ${name} from the output`);
+        button.setAttribute('aria-pressed', isHidden);
+        button.disabled = !currentCohortId;
+        button.closest('.form-group').classList.toggle('is-output-hidden', isHidden);
+    });
+}
+
+eyeButtons.forEach(button => {
+    button.addEventListener('click', function(e) {
+        // The footer's button sits inside <summary>, so don't let the click open or close that section
+        e.preventDefault();
+        const field = button.dataset.field;
+        updateData(data => {
+            const cohort = findCohort(data, currentCohortId);
+            if (!cohort) return;
+            const hidden = new Set(cohort.hiddenFields);
+            if (hidden.has(field)) {
+                hidden.delete(field);
+            } else {
+                hidden.add(field);
+            }
+            cohort.hiddenFields = OUTPUT_FIELDS.filter(key => hidden.has(key));
+        });
+        renderHiddenFields();
+    });
+});
 
 // ---- Theme and logout ----
 
